@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NoxPlay</title>
+
+<link rel="stylesheet" href="style.css"/>
+</head>
+
+<body>
+
+<!-- SPLASH -->
+<div class="splash" id="splash">
+  <div class="splash-logo">N</div>
+  <div class="splash-title">Noxify</div>
+  <div class="splash-sub">Music Experience</div>
+</div>
+
+<canvas id="particles"></canvas>
+
+<!-- LOGIN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+
+    <div class="login-title">Noxify</div>
+
+    <input type="email" id="user" class="input" placeholder="Email"/>
+    <input type="password" id="pass" class="input" placeholder="Senha"/>
+
+    <button class="login-btn" onclick="login()">Entrar</button>
+    <button class="login-btn register-btn" onclick="openRegister()">Criar Conta</button>
+
+  </div>
+</div>
+
+<!-- REGISTER -->
+<div class="login-screen" id="registerScreen" style="display:none;">
+  <div class="login-box">
+
+    <div class="login-title">Criar Conta</div>
+
+    <input type="text" class="input" placeholder="Nome de usuário" id="registerName"/>
+    <input type="email" class="input" placeholder="Email" id="registerEmail"/>
+    <input type="password" class="input" placeholder="Senha" id="registerPass"/>
+    <input type="password" class="input" placeholder="Confirmar senha" id="registerConfirm"/>
+
+    <button class="login-btn" onclick="register()">Cadastrar</button>
+    <button class="login-btn register-btn" onclick="backToLogin()">Voltar</button>
+
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app">
+
+  <!-- HEADER FIXO (NoxPlay + Perfil) -->
+  <div class="header">
+
+    <div class="brand">
+      <h1>Noxify</h1>
+    </div>
+
+    <div class="user-bar">
+
+      <div class="user-avatar">N</div>
+
+      <div class="user-info">
+        <div class="user-name" id="userDisplay">Usuário</div>
+        <div class="user-status">Premium</div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- CONTEÚDO -->
+  <div class="main">
+
+<div class="top-actions">
+  <button onclick="sortAZ()">A-Z</button>
+  <button onclick="resetOrder()">Original</button>
+  <button onclick="logout()">Sair</button>
+</div>
+
+<input class="search"
+placeholder="Buscar músicas..."
+onkeyup="searchMusic(this.value)"/>
+
+<div id="musicCount"></div>
+
+<!-- FILA -->
+<div class="queue-box">
+
+  <div class="queue-title">
+    Próximas músicas
+  </div>
+
+  <div id="queueList"></div>
+
+</div>
+
+<!-- LISTA DE MÚSICAS -->
+<div id="musicList"></div>
+<!-- LISTA DE MÚSICAS -->
+<div id="musicList"></div>
+  </div>
+
+  <!-- PLAYER -->
+<div class="player">
+<img id="nowCover" class="now-cover" src="LogoPlayer.jpg" />
+<canvas id="equalizer"></canvas>
+  <div class="now-playing" id="currentMusic">
+    🎧 Nenhuma música tocando
+  </div>
+
+  <!-- BARRA DE PROGRESSO -->
+  <input type="range" id="progress" value="0" min="0" max="100">
+
+  <!-- TEMPO -->
+  <div class="time">
+    <span id="currentTime">0:00</span>
+    <span id="duration">0:00</span>
+  </div>
+
+  <!-- CONTROLES -->
+<div class="controls">
+
+<button id="shuffleBtn"
+onclick="toggleShuffle()">
+⤮
+</button>
+
+<button onclick="prevMusic()">⏮</button>
+
+<button onclick="togglePlay()" id="playBtn">
+▶
+</button>
+
+<button onclick="nextMusic()">⏭</button>
+
+</div>
+
+  <audio id="audio"></audio>
+</div>
+
+<!-- FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+import {
+getAuth,
+createUserWithEmailAndPassword,
+signInWithEmailAndPassword,
+signOut,
+updateProfile
+} from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
+
+const firebaseConfig = {
+ apiKey: "AIzaSyAAjidiHPAQoo-6YFKy1BIXPUgXmuWSf1s",
+  authDomain: "noxplay-c48f9.firebaseapp.com",
+  projectId: "noxplay-c48f9",
+  storageBucket: "noxplay-c48f9.firebasestorage.app",
+  messagingSenderId: "947875942986",
+  appId: "1:947875942986:web:99a8ad63049d4595808cb3",
+  measurementId: "G-E522RETSM7"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+window.auth = auth;
+
+window.firebaseFunctions = {
+createUserWithEmailAndPassword,
+signInWithEmailAndPassword,
+signOut,
+updateProfile
+};
+</script>
+
+<script src="app.js"></script>
+<div id="toast" class="toast"></div>
+</body>
+</html>
