@@ -21,7 +21,7 @@ const PLAYLIST = [
 
   /* Arctic Monkeys */
   { name:"I Wanna Be Yours", artist:"Arctic Monkeys", src:"I Wanna Be Yours.mp3", cover:"ArcticMonkeys.jpg" },
-  { name:"Do I Wanna Know?", artist:"Arctic Monkeys", src:"Do I Wanna Know.mp3", cover:"ArcticMonkeys.jpg" },
+  { name:"Do I Wanna Know?", artist:"Arctic Monkeys", src:"Do i wanna know.mp3", cover:"ArcticMonkeys.jpg" },
   { name:"R U Mine?", artist:"Arctic Monkeys", src:"R U Mine.mp3", cover:"ArcticMonkeys.jpg" },
   { name:"No. 1 Party Anthem", artist:"Arctic Monkeys", src:"No. 1 Party Anthem.mp3", cover:"ArcticMonkeys.jpg" },
   { name:"505", artist:"Arctic Monkeys", src:"505.mp3", cover:"ArcticMonkeys3.jpg" },
@@ -68,7 +68,7 @@ const PLAYLIST = [
   { name:"Outra Vida", artist:"Armandinho", src:"Outra Vida.mp3", cover:"Armandinho.jpg" },
 
   /* Drake / Frank Ocean / Jaymes Young */
-  { name:"One Dance", artist:"Drake", src:"One Dance.mp3", cover:"https://upload.wikimedia.org/wikipedia/en/a/af/Drake_-_Views_cover.jpg" },
+  { name:"One Dance", artist:"Drake", src:"One dance.mp3", cover:"https://upload.wikimedia.org/wikipedia/en/a/af/Drake_-_Views_cover.jpg" },
   { name:"Pink Matter", artist:"Frank Ocean, André 3000", src:"Pink Matter.mp3", cover:"Frank Ocean.jpg" },
   { name:"Pink + White", artist:"Frank Ocean", src:"PinkWhite.mp3", cover:"Frank Ocean2.jpg" },
   { name:"Ivy", artist:"Frank Ocean", src:"Ivy.mp3", cover:"Frank Ocean2.jpg" },
