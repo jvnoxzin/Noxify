@@ -131,7 +131,7 @@ const PLAYLIST = [
   { name:"Menina Veneno", artist:"Ritchie", src:"Menina Veneno.mp3", cover:"Ritchie.jpg" },
   { name:"Se fosse", artist:"Derxan", src:"Se fosse.mp3", cover:"Derxan.jpg" },
   { name:"Segredos - Frejat", artist:"Warner Music Brasil", src:"Segredos - Frejat.mp3", cover:"Warner Music Brasil.jpg" },
-  { name:"Skank - Acima do Sol [HQ]", artist:"Heart's Hits", src:"Skank - Acima do Sol [HQ].mp3", cover:"Heart's Hits.jpg" },
+  { name:"Skank - Acima do Sol [HQ]", artist:"Heart's Hits", src:"Skank - Acima do Sol.mp3", cover:"Heart's Hits.jpg" },
   { name:"Ainda Gosto Dela", artist:"Skank", src:"Ainda Gosto Dela.mp3", cover:"Skank.jpg" },
   { name:"Resposta", artist:"Skank", src:"Resposta.mp3", cover:"Skank 2.jpg" },
   { name:"Te Ver", artist:"Skank", src:"Te Ver.mp3", cover:"Skank 3.jpg" },
