@@ -1,300 +1,278 @@
 /* =========================================================
-   NOXIFY — db.js (Migrado para Supabase)
-   Ligação com o Supabase (perfis públicos, seguidores, chat
-   e armazenamento de músicas no Supabase Storage).
+   NOXIFY — db.js
+   Ligação com o Firestore (perfis públicos, seguidores e chat).
+   Carrega separado do login: se falhar, o resto do app continua.
+   Regras de segurança: firestore.rules
 ========================================================= */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+import {
+  initializeFirestore, doc, collection, setDoc, getDoc, getDocs, deleteDoc,
+  query, where, orderBy, limit, limitToLast, onSnapshot, serverTimestamp,
+  writeBatch, getCountFromServer
+} from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
 
-// Configurações do seu projeto Supabase (URL e Anon Key Pública)
+const db = initializeFirestore(getApp(), { experimentalAutoDetectLongPolling: true });
+
+/* id do documento de um nome (sem "/" e sem "." sozinho) */
+const nameDoc = (lower) => doc(db, "usernames", encodeURIComponent(lower).replace(/\./g, "%2E"));
+
+/* ---------- Supabase (só os arquivos de música; perfis, seguidores e chat ficam no Firestore) ---------- */
 const SUPABASE_URL = "https://fjzodnouorrdlavnnvnv.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_sdUjknXEYe56HZtVaAmxcA_A2xyJnP9"; // Usando a chave pública segura
+const SUPABASE_ANON_KEY = "sb_publishable_sdUjknXEYe56HZtVaAmxcA_A2xyJnP9";   // chave pública (anon)
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let sbClient = null;
+
+/* carrega só quando alguém envia ou toca uma música enviada: se o Supabase falhar, o resto do app continua */
+async function useSupabase(){
+  if (!sbClient){
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+    sbClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+  return sbClient;
+}
 
 const currentUid = () => (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null;
 
-// Função utilitária para converter os dados do Supabase para o formato do player Noxify
+/* erros do Supabase -> os mesmos códigos que o uploads.js já sabe explicar em português */
+function sbFail(err){
+  const e = new Error((err && err.message) || "Erro no armazenamento");
+  const st = Number(err && (err.statusCode || err.status));
+  const msg = String((err && err.message) || "");
+  if (st === 401 || st === 403 || /row-level security|not authorized|permission/i.test(msg)) e.code = "storage/unauthorized";
+  else if (st === 404 || /not found|Object not found/i.test(msg)) e.code = "storage/object-not-found";
+  else if (st === 413 || /exceeded the maximum|too large/i.test(msg)) e.code = "storage/quota-exceeded";
+  else if (/Failed to fetch|NetworkError|network/i.test(msg)) e.code = "storage/retry-limit-exceeded";
+  else e.code = (err && err.code) || "storage/unknown";
+  return e;
+}
+
 const songFrom = (x) => ({
-  id: x.id,
-  ownerUid: x.owner_uid,
-  ownerName: x.owner_name || "",
-  title: x.title,
-  artist: x.artist,
-  visibility: x.visibility,
-  audioPath: x.audio_path,
-  coverPath: x.cover_path || "",
-  size: x.size || 0,
-  createdAt: x.created_at ? new Date(x.created_at).getTime() : Date.now()
+  id: x.id, ownerUid: x.owner_uid, ownerName: x.owner_name || "", title: x.title, artist: x.artist,
+  visibility: x.visibility, audioPath: x.audio_path, coverPath: x.cover_path || "",
+  size: x.size || 0, createdAt: x.created_at ? new Date(x.created_at).getTime() : Date.now()
 });
+
+const ms = (t) => (t && t.toMillis ? t.toMillis() : Date.now());
 
 window.NoxDB = {
 
   chatId(a, b){ return [a, b].sort().join("_"); },
 
   /* ---------- perfis ---------- */
-  async upsertUser(uid, data){
-    const { error } = await supabase
-      .from("users")
-      .upsert({ uid, ...data, updated_at: new Date().toISOString() });
-    if (error) throw error;
+  upsertUser(uid, data){
+    return setDoc(doc(db, "users", uid), Object.assign({}, data, { updatedAt: serverTimestamp() }), { merge: true });
   },
 
   async getUser(uid){
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("uid", uid)
-      .maybeSingle();
-    if (error || !data) return null;
-    return data;
+    const s = await getDoc(doc(db, "users", uid));
+    return s.exists() ? Object.assign({ uid }, s.data()) : null;
   },
 
   async searchUsers(prefix, max){
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .gte("name_lower", prefix)
-      .lte("name_lower", prefix + "\uf8ff") // Busca prefixo
-      .limit(max || 20);
-    if (error) return [];
-    return data;
+    const q = query(
+      collection(db, "users"),
+      where("nameLower", ">=", prefix),
+      where("nameLower", "<=", prefix + ""),
+      limit(max || 20)
+    );
+    const s = await getDocs(q);
+    return s.docs.map((d) => Object.assign({ uid: d.id }, d.data()));
   },
 
   /* ---------- nomes únicos ---------- */
   async isNameFree(lower, uid){
-    const { data } = await supabase
-      .from("usernames")
-      .select("uid")
-      .eq("name", lower)
-      .maybeSingle();
-    return !data || (!!uid && data.uid === uid);
+    const s = await getDoc(nameDoc(lower));
+    return !s.exists() || (!!uid && s.data().uid === uid);
   },
 
+  /* reserva o nome para a conta e libera o antigo (tudo ou nada) */
   async claimName(uid, lower){
-    // Tenta reservar o nome
-    const { error } = await supabase.from("usernames").upsert({ name: lower, uid });
-    if (error) {
-      if (error.code === '23505') { // Código de violação de unicidade no Postgres
-         const e = new Error("name-taken"); e.code = "name-taken"; throw e;
-      }
-      throw error;
+
+    const mine = await getDoc(nameDoc(lower));
+    if (mine.exists() && mine.data().uid !== uid){
+      const e = new Error("name-taken"); e.code = "name-taken"; throw e;
     }
-  },
 
-  /* ---------- músicas enviadas (Supabase Storage + Tabela user_songs) ---------- */
+    const prev = await getDoc(doc(db, "users", uid));
+    const oldLower = prev.exists() ? prev.data().nameLower : "";
 
-  async uploadSong(opts, onProgress, ctl){
-    const uid = currentUid();
-    if (!uid){ const e = new Error("Sem login"); e.code = "unauthenticated"; throw e; }
+    const b = writeBatch(db);
+    if (!mine.exists()) b.set(nameDoc(lower), { uid });
+    if (oldLower && oldLower !== lower){
+      const old = await getDoc(nameDoc(oldLower));
+      if (old.exists() && old.data().uid === uid) b.delete(nameDoc(oldLower));
+    }
 
-    const id = crypto.randomUUID(); // Gera um ID único para a música
-    const audioPath = `${uid}/${id}.mp3`;
-    const coverPath = opts.cover ? `${uid}/${id}.jpg` : "";
-    ctl = ctl || {};
-
-    try {
-      // 1. Envia o áudio para o Bucket 'songs'
-      if (ctl.cancelled) throw new Error("Cancelado");
-      const { error: audioErr } = await supabase.storage
-        .from("songs")
-        .upload(audioPath, opts.file, { contentType: "audio/mpeg", upsert: false });
-      
-      if (audioErr) throw audioErr;
-      if (onProgress) onProgress(0.9); // Progresso simulado
-
-      // 2. Envia a capa se houver
-      if (opts.cover) {
-        if (ctl.cancelled) throw new Error("Cancelado");
-        const { error: coverErr } = await supabase.storage
-          .from("songs")
-          .upload(coverPath, opts.cover, { contentType: "image/jpeg", upsert: false });
-        if (coverErr) throw coverErr;
+    try{ await b.commit(); }
+    catch(err){
+      if (err && err.code === "permission-denied"){
+        const e = new Error("name-taken"); e.code = "name-taken"; throw e;
       }
-      if (onProgress) onProgress(1); // Progresso simulado
-
-      // 3. Salva os metadados na tabela 'user_songs'
-      const { error: dbErr } = await supabase.from("user_songs").insert({
-        id,
-        owner_uid: uid,
-        owner_name: opts.ownerName,
-        title: opts.title,
-        artist: opts.artist,
-        visibility: opts.visibility,
-        audio_path: audioPath,
-        cover_path: coverPath,
-        size: opts.file.size
-      });
-
-      if (dbErr) throw dbErr;
-      return id;
-
-    } catch (err) {
-      // Limpeza caso dê erro no meio do processo
-      await supabase.storage.from("songs").remove([audioPath, coverPath].filter(Boolean));
       throw err;
     }
   },
 
+  /* ---------- músicas enviadas (Supabase Storage bucket "songs" + tabela user_songs) ---------- */
+
+  /* envia o MP3 (e a capa), depois grava os dados. Se algo falhar, apaga o que já subiu.
+     O Supabase não informa progresso de envio, então a barra anda por etapas. */
+  async uploadSong(opts, onProgress, ctl){
+
+    const uid = currentUid();
+    if (!uid){ const e = new Error("Sem login"); e.code = "unauthenticated"; throw e; }
+
+    const sb = await useSupabase();
+    const id = crypto.randomUUID();
+    const audioPath = uid + "/" + id + ".mp3";
+    const coverPath = opts.cover ? uid + "/" + id + ".jpg" : "";
+    const sent = [];
+    ctl = ctl || {};
+    ctl.cancel = () => { ctl.cancelled = true; };
+
+    const stop = () => {
+      if (ctl.cancelled){ const e = new Error("Cancelado"); e.code = "storage/canceled"; throw e; }
+    };
+
+    try{
+      stop();
+      if (onProgress) onProgress(0.05);
+      const a = await sb.storage.from("songs").upload(audioPath, opts.file, { contentType: "audio/mpeg", upsert: false });
+      if (a.error) throw sbFail(a.error);
+      sent.push(audioPath);
+      if (onProgress) onProgress(0.85);
+      stop();
+
+      if (opts.cover){
+        const c = await sb.storage.from("songs").upload(coverPath, opts.cover, { contentType: "image/jpeg", upsert: false });
+        if (c.error) throw sbFail(c.error);
+        sent.push(coverPath);
+      }
+      if (onProgress) onProgress(0.95);
+      stop();
+
+      const r = await sb.from("user_songs").insert({
+        id, owner_uid: uid, owner_name: opts.ownerName, title: opts.title, artist: opts.artist,
+        visibility: opts.visibility, audio_path: audioPath, cover_path: coverPath, size: opts.file.size
+      });
+      if (r.error) throw sbFail(r.error);
+      if (onProgress) onProgress(1);
+    }catch(err){
+      /* não deixa arquivo órfão para trás */
+      if (sent.length){ try{ await sb.storage.from("songs").remove(sent); }catch(e){} }
+      throw err;
+    }
+    return id;
+  },
+
   async listMySongs(uid){
-    const { data, error } = await supabase
-      .from("user_songs")
-      .select("*")
-      .eq("owner_uid", uid)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (error) throw error;
+    const sb = await useSupabase();
+    const { data, error } = await sb.from("user_songs").select("*").eq("owner_uid", uid)
+      .order("created_at", { ascending: false }).limit(100);
+    if (error) throw sbFail(error);
     return (data || []).map(songFrom);
   },
 
   async listPublicSongs(uid){
-    const { data, error } = await supabase
-      .from("user_songs")
-      .select("*")
-      .eq("owner_uid", uid)
-      .eq("visibility", "public")
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (error) throw error;
+    const sb = await useSupabase();
+    const { data, error } = await sb.from("user_songs").select("*").eq("owner_uid", uid).eq("visibility", "public")
+      .order("created_at", { ascending: false }).limit(100);
+    if (error) throw sbFail(error);
     return (data || []).map(songFrom);
   },
 
   async updateSong(id, patch){
-    const dbPatch = {};
-    if (patch.title) dbPatch.title = patch.title;
-    if (patch.artist) dbPatch.artist = patch.artist;
-    if (patch.ownerName) dbPatch.owner_name = patch.ownerName;
-    if (patch.visibility) dbPatch.visibility = patch.visibility;
-
-    const { error } = await supabase.from("user_songs").update(dbPatch).eq("id", id);
-    if (error) throw error;
+    const sb = await useSupabase();
+    const p = {};
+    if (patch.title) p.title = patch.title;
+    if (patch.artist) p.artist = patch.artist;
+    if (patch.ownerName) p.owner_name = patch.ownerName;
+    if (patch.visibility) p.visibility = patch.visibility;
+    const { error } = await sb.from("user_songs").update(p).eq("id", id);
+    if (error) throw sbFail(error);
   },
 
+  /* apaga primeiro os arquivos e só depois o registro: se algo falhar no meio, dá para tentar de novo */
   async deleteSong(song){
-    // Remove os arquivos físicos
-    for (const path of [song.audioPath, song.coverPath].filter(Boolean)){
-      await supabase.storage.from("songs").remove([path]);
-    }
-    // Remove o registro do banco
-    const { error } = await supabase.from("user_songs").delete().eq("id", song.id);
-    if (error) throw error;
+    const sb = await useSupabase();
+    const paths = [song.audioPath, song.coverPath].filter(Boolean);
+    const rm = await sb.storage.from("songs").remove(paths);
+    if (rm.error) throw sbFail(rm.error);
+    const { error } = await sb.from("user_songs").delete().eq("id", song.id);
+    if (error) throw sbFail(error);
   },
 
   async getFileBlob(path){
-    // Baixa o arquivo do storage (respeitando RLS) e retorna como Blob
-    const { data, error } = await supabase.storage.from("songs").download(path);
-    if (error) throw error;
+    const sb = await useSupabase();
+    const { data, error } = await sb.storage.from("songs").download(path);
+    if (error) throw sbFail(error);
     return data;
   },
 
   /* ---------- seguidores ---------- */
   async follow(me, other){
-    await supabase.from("followers").upsert([
-      { follower_id: me, following_id: other }
-    ]);
+    const b = writeBatch(db);
+    b.set(doc(db, "users", me, "following", other), { at: serverTimestamp() });
+    b.set(doc(db, "users", other, "followers", me), { at: serverTimestamp() });
+    await b.commit();
   },
 
   async unfollow(me, other){
-    await supabase.from("followers").delete().match({ follower_id: me, following_id: other });
+    const b = writeBatch(db);
+    b.delete(doc(db, "users", me, "following", other));
+    b.delete(doc(db, "users", other, "followers", me));
+    await b.commit();
   },
 
   async isFollowing(me, other){
-    const { data } = await supabase
-      .from("followers")
-      .select("*")
-      .eq("follower_id", me)
-      .eq("following_id", other)
-      .maybeSingle();
-    return !!data;
+    const s = await getDoc(doc(db, "users", me, "following", other));
+    return s.exists();
   },
 
   async listFollow(uid, kind){
-    if (kind === "followers") {
-      const { data } = await supabase.from("followers").select("follower_id").eq("following_id", uid);
-      return (data || []).map(x => x.follower_id);
-    } else {
-      const { data } = await supabase.from("followers").select("following_id").eq("follower_id", uid);
-      return (data || []).map(x => x.following_id);
-    }
+    const s = await getDocs(query(collection(db, "users", uid, kind), limit(100)));
+    return s.docs.map((d) => d.id);
   },
 
   async countFollow(uid, kind){
-    const list = await this.listFollow(uid, kind);
-    return list.length;
+    try{
+      const s = await getCountFromServer(collection(db, "users", uid, kind));
+      return s.data().count;
+    }catch(e){
+      return (await this.listFollow(uid, kind)).length;
+    }
   },
 
   /* ---------- chat ---------- */
   subscribeChats(uid, onData, onError){
-    // Assina mudanças na tabela de chats para atualizar em tempo real
-    const channel = supabase.channel('changes_noxify_chats')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => {
-        this._fetchChats(uid).then(onData).catch(onError);
-      })
-      .subscribe();
-
-    this._fetchChats(uid).then(onData).catch(onError);
-    return () => { supabase.removeChannel(channel); };
-  },
-
-  async _fetchChats(uid){
-    const { data } = await supabase
-      .from("chats")
-      .select("*")
-      .contains("members", [uid]);
-    return (data || []).map(d => ({
-      id: d.id,
-      members: d.members || [],
-      lastText: d.last_text || "",
-      lastFrom: d.last_from || "",
-      lastAt: d.last_at ? new Date(d.last_at).getTime() : Date.now()
-    }));
+    const q = query(collection(db, "chats"), where("members", "array-contains", uid));
+    return onSnapshot(q, (snap) => {
+      onData(snap.docs.map((d) => {
+        const x = d.data({ serverTimestamps: "estimate" });
+        return { id: d.id, members: x.members || [], lastText: x.lastText || "", lastFrom: x.lastFrom || "", lastAt: ms(x.lastAt) };
+      }));
+    }, onError);
   },
 
   subscribeMessages(chatId, onData, onError){
-    // Assina novas mensagens inseridas neste chat específico
-    const channel = supabase.channel(`messages:${chatId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, () => {
-        this._fetchMessages(chatId).then(onData).catch(onError);
-      })
-      .subscribe();
-
-    this._fetchMessages(chatId).then(onData).catch(onError);
-    return () => { supabase.removeChannel(channel); };
-  },
-
-  async _fetchMessages(chatId){
-    const { data } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("chat_id", chatId)
-      .order("at", { ascending: true })
-      .limit(150);
-    return (data || []).map(m => ({
-      id: m.id,
-      from: m.sender_id,
-      text: m.text,
-      at: m.at ? new Date(m.at).getTime() : Date.now()
-    }));
+    const q = query(collection(db, "chats", chatId, "messages"), orderBy("at"), limitToLast(150));
+    return onSnapshot(q, (snap) => {
+      onData(snap.docs.map((d) => {
+        const x = d.data({ serverTimestamps: "estimate" });
+        return { id: d.id, from: x.from, text: x.text, at: ms(x.at) };
+      }));
+    }, onError);
   },
 
   async sendMessage(chatId, members, from, text){
-    const now = new Date().toISOString();
-    // Insere a mensagem
-    await supabase.from("messages").insert({
-      chat_id: chatId,
-      sender_id: from,
-      text,
-      at: now
+    const b = writeBatch(db);
+    b.set(doc(db, "chats", chatId), {
+      members, lastText: text.slice(0, 80), lastFrom: from, lastAt: serverTimestamp()
+    }, { merge: true });
+    b.set(doc(collection(db, "chats", chatId, "messages")), {
+      from, text, at: serverTimestamp()
     });
-
-    // Atualiza o último texto da conversa (upsert para criar o chat se não existir)
-    await supabase.from("chats").upsert({
-      id: chatId,
-      members,
-      last_text: text.slice(0, 80),
-      last_from: from,
-      last_at: now
-    });
+    await b.commit();
   }
 };
 
