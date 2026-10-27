@@ -1,0 +1,78 @@
+NOXIFY — ENVIO E COMPARTILHAMENTO DE MÚSICAS (guia)
+===================================================
+
+O QUE FOI ADICIONADO
+- Perfil > "Minhas músicas" > "+ Enviar música": escolhe o MP3, título, artista, capa (opcional) e
+  se a música é Privada (só você) ou Pública (todos os usuários logados).
+- Perfil de outra pessoa: seção "Músicas publicadas" (só as públicas), com tocar e baixar.
+- No seu perfil você pode tocar, baixar, editar título/artista, mudar privada/pública e excluir.
+
+NADA É PUBLICADO AUTOMATICAMENTE. Nenhuma regra foi enviada ao seu Firebase por mim.
+Você precisa fazer os passos abaixo (uma vez só).
+
+PASSO 1 — Ativar o Storage
+ 1. console.firebase.google.com > projeto noxplay-c48f9 > Build > Storage > "Começar".
+ 2. Escolha "modo de produção" e um local (ex.: southamerica-east1). O local não muda depois.
+ 3. ATENÇÃO: o Firebase pode exigir o plano Blaze (pago por uso, com cota grátis) para criar
+    o bucket. Eu NÃO consegui confirmar isso nas páginas oficiais: veja o que o console mostra.
+    Se pedir cartão, ainda assim há cota gratuita mensal; configure um alerta de orçamento
+    em Google Cloud > Faturamento > Orçamentos.
+ 4. Anote o nome do bucket que aparece no topo do Storage (ex.: noxplay-c48f9.firebasestorage.app).
+
+PASSO 2 — Publicar as regras (NÃO apague nada que já existe)
+ a) Firestore: Build > Firestore Database > Regras. Cole o conteúdo de firestore.rules
+    (ele já contém as regras antigas de users, usernames e chats + a nova userSongs) > Publicar.
+ b) Storage: Build > Storage > Regras. Cole o conteúdo de storage.rules > Publicar.
+    Essas regras leem o Firestore para saber se a música é pública. Se o console pedir
+    permissão para o serviço de regras acessar o Firestore, aceite.
+ Faça o teste do "Simulador de regras" do console antes de publicar, se quiser.
+
+PASSO 3 — CORS do bucket (necessário para tocar/baixar)
+ O app baixa o arquivo com o login do usuário (sem link público), e isso exige CORS.
+ No Google Cloud Shell (console.cloud.google.com, ícone >_), com o cors.json enviado a ele:
+   gcloud storage buckets update gs://SEU-BUCKET --cors-file=cors.json
+ (troque SEU-BUCKET pelo nome do passo 1). Sem isso, tocar/baixar dá erro de CORS.
+ Depois, se quiser, troque "*" em cors.json pelo endereço do seu site no Vercel.
+
+PASSO 4 — Domínio
+ Authentication > Configurações > Domínios autorizados: seu domínio .vercel.app deve estar lá
+ (já deve estar, pois o login funciona).
+
+PASSO 5 — Publicar o app (GitHub/Vercel)
+ Substitua/adicione na pasta do repositório: index.html, style.css, app.js, social.js, db.js,
+ uploads.js, sw.js (e os demais do zip). Depois:
+   git add .
+   git commit -m "Envio de músicas"
+   git push
+ A Vercel publica sozinha. No celular, feche e abra o app 2 vezes para atualizar o cache.
+ (Os arquivos .rules e cors.json não são usados pelo site; são só para colar/aplicar no Firebase.)
+
+COMO TESTAR COM DUAS CONTAS
+ 1. Conta A: Perfil > Enviar música > uma pública e uma privada.
+ 2. Conta B (outro navegador/aba anônima): Social > Buscar pessoas > conta A.
+    Deve aparecer SÓ a pública; toque e baixe.
+ 3. Conta A: mude a pública para privada. Conta B: reabra o perfil -> some. Tocar de novo falha.
+ 4. Excluir: conta A exclui; confira no console que sumiu do Storage e do Firestore (userSongs).
+
+SEGURANÇA / LIMITES (leia)
+- Privada e pública são impostas pelas REGRAS (Firestore + Storage), não só pela tela.
+- O app não usa getDownloadURL (links com token que ignoram as regras). Mesmo assim, quem JÁ
+  baixou uma música pública mantém o arquivo; tornar privada bloqueia só novos acessos.
+- O limite de 25 MB e "só MP3" são checados nas regras (tamanho e tipo declarado). As regras
+  NÃO conseguem olhar o conteúdo do arquivo; o app confere cabeçalho e decodificação no
+  cliente, mas um cliente malicioso poderia mandar outro conteúdo com tipo audio/mpeg.
+- Limite de 100 músicas por usuário: só no app (cliente). Impor no servidor exige Cloud
+  Functions. Spam e abuso de cota (arquivos sem documento) exigem App Check e/ou Cloud
+  Functions; não implementei para não adicionar infraestrutura paga.
+- Direitos autorais/moderação: há uma caixa obrigatória de confirmação de direitos, mas não
+  há moderação nem botão de denúncia. Responsabilidade é sua, como dono do app.
+- Músicas enviadas não entram em playlists locais nem no "offline" do app (baixar salva o MP3
+  no aparelho, fora do app).
+- Excluir: apaga o arquivo e depois o registro. Se a rede cair no meio, o registro continua e
+  o botão Excluir pode ser tocado de novo. Se uma ENVIO falhar no meio, o app apaga o que já
+  subiu. Arquivos soltos (sem registro) só aparecem no console do Storage: pasta songs/UID/.
+
+CUSTOS (estimativa, confira os preços atuais do Firebase)
+- Armazenamento, e principalmente DOWNLOAD (tráfego de saída), crescem com o uso: cada vez que
+  alguém toca ou baixa uma música, o arquivo inteiro é baixado de novo (ele fica só em memória
+  durante a sessão). Defina alertas de orçamento.
