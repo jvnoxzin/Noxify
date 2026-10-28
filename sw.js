@@ -2,7 +2,7 @@
    - SHELL: arquivos do app (HTML/CSS/JS/Firebase), atualizados em segundo plano
    - MUSIC: músicas e capas que o usuário baixou (servidas sempre do cache) */
 
-const SHELL = "noxify-shell-v13";
+const SHELL = "noxify-shell-v14";
 const MUSIC = "noxify-music-v1";
 const SHELL_FILES = ["./", "index.html", "style.css", "util.js", "playlist.js", "settings.js", "stats.js", "lyrics.js", "bg.js", "profile.js", "playlists.js", "social.js", "uploads.js", "db.js", "app.js", "manifest.json", "icon-192.png", "icon-512.png", "LogoPlayer.jpg"];
 
