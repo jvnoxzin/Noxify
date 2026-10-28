@@ -44,7 +44,7 @@ const Social = (() => {
     "Que vibe! 😍"
   ];
 
-  const CHAT_EMOJIS = ["😊", "😂", "🔥", "🎵", "💜", "😎", "❤️", "✨", "😍", "🥰", "😆", "🤩", "👍", "🎉", "🥳", "✨"];
+  const CHAT_EMOJIS = ["😊", "😂", "🔥", "🎵", "🗿", "😎", "❤️", "🐒", "😍", "🥰", "🖕🏻", "🫦", "👍", "💩", "🙄", "✨"];
 
   const CHAT_BG_PRESETS = {
     default: "linear-gradient(180deg, rgba(18, 12, 24, 0.8), rgba(11, 10, 17, 0.9))",
