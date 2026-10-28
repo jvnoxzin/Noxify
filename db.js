@@ -9,7 +9,7 @@ import { getApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.
 import {
   initializeFirestore, doc, collection, setDoc, getDoc, getDocs, deleteDoc,
   query, where, orderBy, limit, limitToLast, onSnapshot, serverTimestamp,
-  writeBatch, getCountFromServer
+  writeBatch, getCountFromServer, arrayUnion
 } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
 
 const db = initializeFirestore(getApp(), { experimentalAutoDetectLongPolling: true });
@@ -298,20 +298,19 @@ window.NoxDB = {
     }, onError);
   },
 
-  async upsertCallSession(chatId, patch){
+  /* replace=true começa uma chamada nova do zero (apaga sinais e resposta da chamada anterior) */
+  async upsertCallSession(chatId, patch, replace){
     const ref = doc(db, "callSessions", chatId);
-    const cur = await getDoc(ref);
-    const base = cur.exists() ? cur.data() : { members: chatId.split("_"), events: [] };
-    await setDoc(ref, Object.assign({}, base, { members: chatId.split("_"), updatedAt: Date.now(), ...patch }), { merge: true });
+    const data = Object.assign({ members: chatId.split("_"), updatedAt: Date.now() }, patch);
+    if (replace) data.events = [];
+    await setDoc(ref, data, replace ? undefined : { merge: true });
   },
 
+  /* arrayUnion: dois lados mandando candidatos ao mesmo tempo não se sobrescrevem */
   async pushCallEvent(chatId, event){
     const ref = doc(db, "callSessions", chatId);
-    const cur = await getDoc(ref);
-    const base = cur.exists() ? cur.data() : { members: chatId.split("_"), events: [] };
-    const events = Array.isArray(base.events) ? base.events.slice() : [];
-    events.push(Object.assign({ id: crypto.randomUUID(), at: Date.now() }, event));
-    await setDoc(ref, { ...base, members: chatId.split("_"), events, updatedAt: Date.now() }, { merge: true });
+    const ev = Object.assign({ id: crypto.randomUUID(), at: Date.now() }, event);
+    await setDoc(ref, { members: chatId.split("_"), events: arrayUnion(ev), updatedAt: Date.now() }, { merge: true });
   },
 
   async clearCallSession(chatId){
