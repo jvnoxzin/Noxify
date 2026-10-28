@@ -285,6 +285,7 @@ window.NoxDB = {
           text: x.text || "",
           type: x.type || "text",
           image: x.image || "",
+          audio: x.audio || "",
           alt: x.alt || "",
           at: ms(x.at)
         };
@@ -349,3 +350,4 @@ window.NoxDB = {
 };
 
 window.dispatchEvent(new Event("nox-db-ready"));
+                              
