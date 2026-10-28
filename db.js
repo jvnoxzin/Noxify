@@ -279,7 +279,15 @@ window.NoxDB = {
     return onSnapshot(q, (snap) => {
       onData(snap.docs.map((d) => {
         const x = d.data({ serverTimestamps: "estimate" });
-        return { id: d.id, from: x.from, text: x.text, at: ms(x.at) };
+        return {
+          id: d.id,
+          from: x.from,
+          text: x.text || "",
+          type: x.type || "text",
+          image: x.image || "",
+          alt: x.alt || "",
+          at: ms(x.at)
+        };
       }));
     }, onError);
   },
@@ -310,14 +318,33 @@ window.NoxDB = {
     await deleteDoc(doc(db, "callSessions", chatId));
   },
 
-  async sendMessage(chatId, members, from, text){
+  async sendMessage(chatId, members, from, text, meta = {}){
+    const payload = {
+      from,
+      type: meta.type || "text",
+      at: serverTimestamp()
+    };
+
+    if (meta.type === "sticker"){
+      payload.image = meta.image || "";
+      payload.alt = meta.alt || "figurinha";
+      payload.text = "";
+    } else if (meta.type === "audio") {
+      payload.audio = meta.audio || "";
+      payload.alt = meta.alt || "audio";
+      payload.text = "";
+    } else {
+      payload.text = (text || "").slice(0, 500);
+    }
+
     const b = writeBatch(db);
     b.set(doc(db, "chats", chatId), {
-      members, lastText: text.slice(0, 80), lastFrom: from, lastAt: serverTimestamp()
+      members,
+      lastText: payload.type === "sticker" ? "Figurinha" : payload.type === "audio" ? "Áudio" : (payload.text || "").slice(0, 80),
+      lastFrom: from,
+      lastAt: serverTimestamp()
     }, { merge: true });
-    b.set(doc(collection(db, "chats", chatId, "messages")), {
-      from, text, at: serverTimestamp()
-    });
+    b.set(doc(collection(db, "chats", chatId, "messages")), payload);
     await b.commit();
   }
 };
