@@ -277,14 +277,36 @@
         <button type="button" class="chat-quick" data-chat-quick="Vou ouvir depois 🎧">Depois</button>
       </div>
 
+      <div class="emoji-picker" id="emojiPicker" hidden>
+        <div class="emoji-grid" id="emojiGrid"></div>
+      </div>
+
+      <div class="chat-bg-panel" id="chatBgPanel" hidden>
+        <div class="chat-bg-head">Fundo da conversa</div>
+        <div class="chat-bg-grid">
+          <button type="button" class="bg-option active" data-bg-preset="default">Padrão</button>
+          <button type="button" class="bg-option" data-bg-preset="night">Noite</button>
+          <button type="button" class="bg-option" data-bg-preset="sunset">Sunset</button>
+          <button type="button" class="bg-option" data-bg-preset="ocean">Mar</button>
+          <button type="button" class="bg-option" data-bg-preset="violet">Violeta</button>
+          <button type="button" class="bg-option" data-bg-preset="stars">Estrelas</button>
+        </div>
+        <button type="button" class="pill-btn small ghost" id="chatBgUploadBtn">Importar imagem</button>
+      </div>
+
       <form class="chat-form" id="chatForm" autocomplete="off">
         <button type="button" class="icon-btn" id="chatOptionsBtn" aria-label="Opções do chat">
           <svg class="ic"><use href="#i-more"/></svg>
         </button>
         <input id="chatInput" maxlength="500" placeholder="Mensagem" autocomplete="off"/>
+        <button type="button" class="icon-btn" id="chatAudioBtn" aria-label="Enviar áudio"><span class="emoji-btn">🎙️</span></button>
+        <button type="button" class="icon-btn" id="chatStickerBtn" aria-label="Enviar figurinha"><span class="emoji-btn">🖼️</span></button>
         <button type="button" class="icon-btn" id="chatEmojiBtn" aria-label="Emojis"><span class="emoji-btn">😊</span></button>
         <button class="icon-btn send" type="submit" aria-label="Enviar"><svg class="ic"><use href="#i-send"/></svg></button>
       </form>
+      <input id="chatStickerInput" type="file" accept="image/*" hidden />
+      <input id="chatAudioInput" type="file" accept="audio/*" capture="microphone" hidden />
+      <input id="chatBgInput" type="file" accept="image/*" hidden />
     </section>
 
     <!-- CÁPSULA SONORA -->
@@ -458,7 +480,7 @@
 
         <div class="set-label">Cor do avatar (quando não tem foto)</div>
         <div class="swatches" id="peSwatches">
-          <button class="swatch" style="--a:#c084fc;--b:#7c3aed" aria-label="Roxo"></button>
+          <button class="swatch" style="--a:#933beb;--b:#7c3aed" aria-label="Roxo"></button>
           <button class="swatch" style="--a:#34d399;--b:#059669" aria-label="Verde"></button>
           <button class="swatch" style="--a:#60a5fa;--b:#2563eb" aria-label="Azul"></button>
           <button class="swatch" style="--a:#f472b6;--b:#db2777" aria-label="Rosa"></button>
