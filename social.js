@@ -583,4 +583,666 @@ const Social = (() => {
   }
 
   function setChatBackgroundCustom(dataUrl){
-    const safeUrl = String(dataUrl || "
+    const safeUrl = String(dataUrl || "").replace(/"/g, "%22");
+    const bg = 'linear-gradient(180deg, rgba(10,10,18,0.18), rgba(10,10,18,0.38)), url("' + safeUrl + '") center/cover no-repeat';
+    applyChatBackground(bg);
+    try{
+      localStorage.setItem(chatBgKey(), JSON.stringify({ type: "custom", value: dataUrl }));
+    }catch(e){}
+  }
+
+  function loadChatBackground(){
+    if (!S.peer) return;
+    try{
+      const raw = localStorage.getItem(chatBgKey());
+      if (!raw) {
+        setChatBackgroundPreset("default");
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.type === "custom" && parsed.value) {
+        setChatBackgroundCustom(parsed.value);
+        return;
+      }
+      if (parsed && parsed.type === "preset") {
+        setChatBackgroundPreset(parsed.name || "default");
+        return;
+      }
+    }catch(e){}
+    setChatBackgroundPreset("default");
+  }
+
+  function toggleEmojiPicker(forceOpen){
+    const picker = document.getElementById("emojiPicker");
+    if (!picker) return;
+    const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : picker.hidden;
+    picker.hidden = !shouldOpen;
+    if (shouldOpen) toggleChatToolbar(false);
+  }
+
+  function insertEmoji(emojiText){
+    const input = document.getElementById("chatInput");
+    if (!input) return;
+    const selected = emojiText || CHAT_EMOJIS[S.emojiIndex % CHAT_EMOJIS.length];
+    S.emojiIndex += 1;
+    const prefix = input.value.trim() ? input.value + " " : "";
+    input.value = prefix + selected;
+    input.focus();
+    toggleEmojiPicker(false);
+  }
+
+  function addQuickMessage(text){
+    const input = document.getElementById("chatInput");
+    if (!input) return;
+    if (!input.value.trim()){ input.value = text; }
+    else { input.value = input.value.trim() + " " + text; }
+    input.focus();
+    toggleChatToolbar(false);
+  }
+
+  async function renderChatView(){
+
+    const peer = S.peer;
+    if (!peer) return;
+
+    $("chatTitle").textContent = "…";
+    $("chatMeta").textContent = "Disponível";
+    $("chatMsgs").innerHTML = "";
+
+    const u = await userInfo(peer);
+    if (S.peer !== peer) return;
+    $("chatTitle").textContent = u.name;
+    $("chatMeta").textContent = "Online agora";
+    paintAvatar($("chatAvatar"), u);
+    loadChatBackground();
+
+    const cid = chatIdWith(peer);
+    if (S.unsubMsgs) S.unsubMsgs();
+
+    S.unsubMsgs = db().subscribeMessages(cid, (msgs) => {
+
+      const box = $("chatMsgs");
+      const stick = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+
+      box.innerHTML = msgs.length
+        ? msgs.map((m) => {
+            if (m.type === "sticker" && m.image) {
+              return '<div class="bubble ' + (m.from === me() ? "mine" : "theirs") + '">' +
+                '<img class="inline-sticker" src="' + esc(m.image) + '" alt="' + esc(m.alt || "figurinha") + '">' +
+                '<time>' + fmtTime(m.at) + '</time></div>';
+            }
+            if (m.type === "audio" && m.audio) {
+              return '<div class="bubble ' + (m.from === me() ? "mine" : "theirs") + '">' +
+                '<audio controls src="' + esc(m.audio) + '"></audio>' +
+                '<time>' + fmtTime(m.at) + '</time></div>';
+            }
+            return '<div class="bubble ' + (m.from === me() ? "mine" : "theirs") + '">' +
+              '<span>' + esc(m.text || "") + '</span><time>' + fmtTime(m.at) + '</time></div>';
+          }).join("")
+        : '<div class="empty">Diga oi para ' + esc(u.name) + ' 👋</div>';
+
+      if (stick || box.dataset.first !== cid){ box.scrollTop = box.scrollHeight; box.dataset.first = cid; }
+
+      if (msgs.length) markSeen(cid, msgs[msgs.length - 1].at);
+    }, (e) => {
+      $("chatMsgs").innerHTML = '<div class="empty">' + esc(errText(e)) + '</div>';
+    });
+  }
+
+  function getCallSessionId(otherUid){
+    return [me(), otherUid].sort().join("_");
+  }
+
+  function updateCallStatus(text){
+    const el = document.getElementById("callStatus");
+    if (el) el.textContent = text;
+  }
+
+  function setCallOverlay(show){
+    const overlay = document.getElementById("callOverlay");
+    if (!overlay) return;
+    overlay.hidden = !show;
+    document.body.classList.toggle("no-scroll", show);
+  }
+
+  async function ensureCallMedia(type){
+    const constraints = {
+      audio: true,
+      video: type === "video"
+    };
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("Este navegador não suporta chamadas de voz/vídeo.");
+    }
+
+    if (S.localStream) {
+      S.localStream.getTracks().forEach((track) => track.stop());
+    }
+
+    S.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    const localVideo = document.getElementById("localVideo");
+    if (localVideo) {
+      localVideo.srcObject = S.localStream;
+      localVideo.muted = true;
+    }
+    return S.localStream;
+  }
+
+  function stopLocalCallTracks(){
+    if (S.localStream) {
+      S.localStream.getTracks().forEach((track) => track.stop());
+      S.localStream = null;
+    }
+    const localVideo = document.getElementById("localVideo");
+    if (localVideo) localVideo.srcObject = null;
+    const remoteVideo = document.getElementById("remoteVideo");
+    if (remoteVideo) remoteVideo.srcObject = null;
+  }
+
+  function cleanupPeerConnection(){
+    if (S.peerConnection) {
+      S.peerConnection.onicecandidate = null;
+      S.peerConnection.ontrack = null;
+      S.peerConnection.onconnectionstatechange = null;
+      S.peerConnection.close();
+      S.peerConnection = null;
+    }
+    S.callCandidates = [];
+    S.callPending = [];
+    S.callSeen = false;
+  }
+
+  async function setupPeerConnection(type){
+    if (!window.RTCPeerConnection) {
+      throw new Error("WebRTC não está disponível neste navegador.");
+    }
+
+    cleanupPeerConnection();
+    S.peerConnection = new RTCPeerConnection({
+      iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }]
+    });
+
+    S.peerConnection.onicecandidate = async (event) => {
+      if (!event.candidate) return;
+      const cand = event.candidate.toJSON ? event.candidate.toJSON() : { candidate: event.candidate.candidate, sdpMid: event.candidate.sdpMid, sdpMLineIndex: event.candidate.sdpMLineIndex };
+      S.callCandidates.push(cand);
+      const sessionId = getCallSessionId(S.callPeer || S.peer);
+      if (!sessionId) return;
+      try {
+        await db().pushCallEvent(sessionId, { type: "candidate", from: me(), data: cand });
+      } catch (err) {
+        console.warn("Erro ao enviar candidate da chamada:", err);
+      }
+    };
+
+    S.peerConnection.ontrack = (event) => {
+      const remoteVideo = document.getElementById("remoteVideo");
+      if (remoteVideo && event.streams && event.streams[0]) {
+        remoteVideo.srcObject = event.streams[0];
+      }
+    };
+
+    S.peerConnection.onconnectionstatechange = () => {
+      const state = S.peerConnection?.connectionState || "new";
+      if (state === "connected") updateCallStatus("Conectado");
+      else if (state === "connecting") updateCallStatus("Conectando...");
+      else if (state === "failed") updateCallStatus("Conexão falhou");
+    };
+
+    if (S.localStream) {
+      S.localStream.getTracks().forEach((track) => {
+        S.peerConnection.addTrack(track, S.localStream);
+      });
+    }
+
+    const remoteVideo = document.getElementById("remoteVideo");
+    if (remoteVideo && type === "video") {
+      remoteVideo.style.display = "block";
+    }
+  }
+
+  async function startCall(type){
+    const bad = unavailable();
+    if (bad){ showToast(bad); return; }
+    if (!S.peer){ showToast("Abra uma conversa antes de iniciar a chamada."); return; }
+
+    S.callType = type || "audio";
+    S.callPeer = S.peer;
+    S.callState = "dialing";
+    S.callSeenIds = new Set();
+
+    try{
+      await ensureCallMedia(S.callType);
+      await setupPeerConnection(S.callType);
+
+      document.getElementById("callTitle").textContent = "Chamada com " + (await userInfo(S.peer)).name;
+      updateCallStatus("Solicitando conexão...");
+      setCallOverlay(true);
+
+      const sessionId = getCallSessionId(S.peer);
+      const offer = await S.peerConnection.createOffer();
+      await S.peerConnection.setLocalDescription(offer);
+      const ld = S.peerConnection.localDescription || offer;
+      await db().upsertCallSession(sessionId, {
+        type: S.callType,
+        status: "dialing",
+        caller: me(),
+        callee: null,
+        members: [me(), S.peer].sort(),
+        offer: { type: ld.type, sdp: ld.sdp },
+        answer: null,
+        lastSignal: Date.now()
+      }, true);
+
+      if (S.callType === "video") {
+        const remoteVideo = document.getElementById("remoteVideo");
+        if (remoteVideo) remoteVideo.style.display = "block";
+      }
+
+      showToast(S.callType === "video" ? "Chamada de vídeo iniciada" : "Chamada de voz iniciada");
+    }catch(err){
+      cleanupPeerConnection();
+      stopLocalCallTracks();
+      setCallOverlay(false);
+      showToast(err && err.message ? err.message : "Não foi possível iniciar a chamada");
+    }
+  }
+
+  async function acceptCall(payload){
+    if (!payload || !payload.caller || payload.caller === me()) return;
+    S.callType = payload.type || "audio";
+    S.callPeer = payload.caller;
+    S.callState = "connecting";
+
+    try{
+      await ensureCallMedia(S.callType);
+      await setupPeerConnection(S.callType);
+      setCallOverlay(true);
+      document.getElementById("callTitle").textContent = "Chamada com " + (await userInfo(payload.caller)).name;
+      updateCallStatus("Aceitando chamada...");
+
+      const sessionId = getCallSessionId(payload.caller);
+      await db().upsertCallSession(sessionId, {
+        type: S.callType,
+        status: "ringing",
+        callee: me(),
+        members: [me(), payload.caller].sort(),
+        lastSignal: Date.now()
+      });
+
+      const offer = payload.offer;
+      if (offer) {
+        await S.peerConnection.setRemoteDescription({ type: offer.type, sdp: offer.sdp });
+        await flushCallCandidates();
+        const answer = await S.peerConnection.createAnswer();
+        await S.peerConnection.setLocalDescription(answer);
+        const la = S.peerConnection.localDescription || answer;
+        await db().upsertCallSession(sessionId, {
+          status: "connected",
+          answer: { type: la.type, sdp: la.sdp },
+          lastSignal: Date.now()
+        });
+        updateCallStatus("Chamada conectada");
+      }
+    }catch(err){
+      console.warn("acceptCall error", err);
+      updateCallStatus("Não foi possível aceitar a chamada");
+    }
+  }
+
+  function closeCallUI(){
+    cleanupPeerConnection();
+    stopLocalCallTracks();
+    S.callState = null;
+    S.callPeer = null;
+    setCallOverlay(false);
+  }
+
+  async function endCall(){
+    if (!S.callPeer) return;
+    const sessionId = getCallSessionId(S.callPeer);
+    try{ await db().clearCallSession(sessionId); }catch(e){}
+    closeCallUI();
+    showToast("Chamada encerrada");
+  }
+
+  /* candidatos ICE que chegaram antes da descrição remota ficam na fila */
+  async function flushCallCandidates(){
+    const pc = S.peerConnection;
+    if (!pc || !pc.remoteDescription) return;
+    const list = S.callPending.splice(0);
+    for (const c of list){
+      try{ await pc.addIceCandidate(c); }
+      catch(err){ console.warn("ICE candidate rejeitado:", err); }
+    }
+  }
+
+  async function handleCallSession(payload){
+    if (!payload || !payload.members) return;
+    const meUid = me();
+    const other = payload.members.find((x) => x !== meUid);
+    if (!other) return;
+
+    S.callSeen = true;
+    S.callSeenIds = S.callSeenIds || new Set();
+
+    if (Array.isArray(payload.events) && S.peerConnection) {
+      for (const event of payload.events) {
+        if (!event || event.from === meUid || event.type !== "candidate" || !event.data) continue;
+        if (event.id && S.callSeenIds.has(event.id)) continue;
+        if (event.id) S.callSeenIds.add(event.id);
+        S.callPending.push(event.data);
+      }
+      await flushCallCandidates();
+    }
+
+    if (payload.answer && payload.caller === meUid && S.peerConnection && !S.peerConnection.remoteDescription && !S.callAnswering) {
+      S.callAnswering = true;
+      try {
+        await S.peerConnection.setRemoteDescription({ type: payload.answer.type, sdp: payload.answer.sdp });
+        await flushCallCandidates();
+        updateCallStatus("Conectado");
+      } catch (err) {
+        console.warn("Erro ao aplicar resposta da chamada:", err);
+      } finally {
+        S.callAnswering = false;
+      }
+    }
+
+    /* chamada nova chegando: pergunta uma vez só e ignora sinais velhos (>90 s) */
+    const fresh = Date.now() - (payload.lastSignal || payload.updatedAt || 0) < 90000;
+    if (payload.status === "dialing" && payload.caller && payload.caller !== meUid && !S.callState && !S.callRinging && fresh) {
+      S.callRinging = true;
+      let accept = false;
+      try{
+        accept = await askConfirm("Receber chamada de " + (await userInfo(payload.caller)).name + "?", "Atender");
+      }finally{
+        S.callRinging = false;
+      }
+      if (accept) {
+        S.callSeenIds = new Set();
+        await acceptCall(payload);
+      } else {
+        try{ await db().clearCallSession(getCallSessionId(payload.caller)); }catch(e){}
+      }
+    }
+
+    if (payload.status === "connected" && payload.caller && payload.caller !== meUid) {
+      updateCallStatus("Conectado");
+    }
+  }
+
+  async function watchCallSessionForActiveChat(){
+    if (!S.peer) return;
+    const sessionId = getCallSessionId(S.peer);
+    if (S.callSessionUnsub) S.callSessionUnsub();
+    S.callSessionUnsub = db().subscribeCallSession(sessionId, async (payload) => {
+      if (!payload){
+        if (S.callState && S.callSeen){ closeCallUI(); showToast("Chamada encerrada"); }
+        return;
+      }
+      await handleCallSession(payload);
+    }, (err) => console.warn("call session error", err));
+  }
+
+  function openStickerPicker(){
+    const input = document.getElementById("chatStickerInput");
+    if (!input) return;
+    input.click();
+  }
+
+  function openAudioPicker(){
+    const input = document.getElementById("chatAudioInput");
+    if (!input) return;
+    input.click();
+  }
+
+  async function sendSticker(file){
+    if (!file || !S.peer || unavailable()) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("Selecione uma imagem válida para a figurinha.");
+      return;
+    }
+    if (file.size > 600 * 1024) {
+      showToast("Figurinha grande demais (máx. 600 KB).");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try{
+        await db().sendMessage(chatIdWith(S.peer), [me(), S.peer].sort(), me(), "", {
+          type: "sticker",
+          image: String(reader.result || ""),
+          alt: file.name || "figurinha"
+        });
+      }catch(err){
+        showToast(errText(err));
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function sendAudio(file){
+    if (!file || !S.peer || unavailable()) return;
+    if (!file.type.startsWith("audio/")) {
+      showToast("Selecione um arquivo de áudio válido.");
+      return;
+    }
+    if (file.size > 600 * 1024) {
+      showToast("Áudio grande demais para o chat (máx. 600 KB, cerca de 30 s). Envie um mais curto.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try{
+        await db().sendMessage(chatIdWith(S.peer), [me(), S.peer].sort(), me(), "", {
+          type: "audio",
+          audio: String(reader.result || ""),
+          alt: file.name || "áudio"
+        });
+      }catch(err){
+        showToast(errText(err));
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  document.addEventListener("click", (e) => {
+    const quick = e.target.closest("[data-chat-quick]");
+    if (quick){
+      addQuickMessage(quick.dataset.chatQuick);
+      return;
+    }
+
+    const optionBtn = e.target.closest("#chatOptionsBtn");
+    if (optionBtn){
+      toggleChatToolbar();
+      return;
+    }
+
+    const emojiBtn = e.target.closest("#chatEmojiBtn");
+    if (emojiBtn){
+      toggleEmojiPicker();
+      return;
+    }
+
+    const emojiPick = e.target.closest("[data-emoji]");
+    if (emojiPick){
+      insertEmoji(emojiPick.dataset.emoji);
+      return;
+    }
+
+    const bgPreset = e.target.closest("[data-bg-preset]");
+    if (bgPreset){
+      setChatBackgroundPreset(bgPreset.dataset.bgPreset);
+      toggleChatToolbar(false);
+      return;
+    }
+
+    const bgUpload = e.target.closest("#chatBgUploadBtn");
+    if (bgUpload){
+      const input = document.getElementById("chatBgInput");
+      if (input) input.click();
+      return;
+    }
+
+    const stickerBtn = e.target.closest("#chatStickerBtn");
+    if (stickerBtn){
+      openStickerPicker();
+      return;
+    }
+
+    const audioBtn = e.target.closest("#chatAudioBtn");
+    if (audioBtn){
+      openAudioPicker();
+      return;
+    }
+
+    const voiceCall = e.target.closest("#chatVoiceCallBtn");
+    if (voiceCall){
+      startCall("audio");
+      return;
+    }
+
+    const videoCall = e.target.closest("#chatVideoCallBtn");
+    if (videoCall){
+      startCall("video");
+      return;
+    }
+
+    const endCallBtn = e.target.closest("#callEndBtn");
+    if (endCallBtn){
+      endCall();
+      return;
+    }
+
+    const micBtn = e.target.closest("#callMicBtn");
+    if (micBtn){
+      const audioTrack = S.localStream && S.localStream.getAudioTracks()[0];
+      if (audioTrack){
+        audioTrack.enabled = !audioTrack.enabled;
+        micBtn.dataset.state = audioTrack.enabled ? "on" : "off";
+        micBtn.textContent = audioTrack.enabled ? "Mic" : "Mic desligado";
+      }
+      return;
+    }
+
+    const camBtn = e.target.closest("#callCamBtn");
+    if (camBtn){
+      const videoTrack = S.localStream && S.localStream.getVideoTracks()[0];
+      if (videoTrack){
+        videoTrack.enabled = !videoTrack.enabled;
+        camBtn.dataset.state = videoTrack.enabled ? "on" : "off";
+        camBtn.textContent = videoTrack.enabled ? "Câmera" : "Câmera desligada";
+      }
+      return;
+    }
+
+    const closeCallBtn = e.target.closest("#callCloseBtn");
+    if (closeCallBtn){
+      endCall();
+      return;
+    }
+
+    if (!e.target.closest("#chatToolbar") && !e.target.closest("#chatOptionsBtn")){
+      toggleChatToolbar(false);
+    }
+  });
+
+  $("chatForm").addEventListener("submit", async (e) => {
+
+    e.preventDefault();
+
+    const input = $("chatInput");
+    const text = input.value.trim().slice(0, 500);
+    if (!text || !S.peer || unavailable()) return;
+
+    input.value = "";
+    toggleChatToolbar(false);
+    toggleEmojiPicker(false);
+    try{
+      await db().sendMessage(chatIdWith(S.peer), [me(), S.peer].sort(), me(), text);
+    }catch(err){
+      input.value = text;
+      showToast(errText(err));
+    }
+  });
+
+  $("chatStickerInput").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      await sendSticker(file);
+      e.target.value = "";
+    }
+  });
+
+  $("chatAudioInput").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      await sendAudio(file);
+      e.target.value = "";
+    }
+  });
+
+  $("chatBgInput").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("Selecione uma imagem válida para o fundo do chat.");
+      e.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setChatBackgroundCustom(String(reader.result || ""));
+      toggleChatToolbar(false);
+      e.target.value = "";
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function onLeave(from, to){
+    if (from === "chat" && to !== "chat"){
+      if (S.unsubMsgs){
+        S.unsubMsgs();
+        S.unsubMsgs = null;
+      }
+      if (S.callSessionUnsub){
+        S.callSessionUnsub();
+        S.callSessionUnsub = null;
+      }
+      if (to !== "chat" && S.callState){
+        endCall();
+      }
+    }
+  }
+
+  /* ---------- teste para as Configurações ---------- */
+  async function check(box){
+
+    const bad = unavailable();
+    if (bad){ diag(box, "bad", "Social indisponível", esc(bad)); return; }
+
+    diag(box, "", "Testando…");
+
+    try{
+      await db().upsertUser(me(), {
+        name: userName().slice(0, 30), nameLower: userName().slice(0, 30).toLowerCase()
+      });
+      const back = await db().getUser(me());
+      if (!back) throw new Error("O perfil não voltou do servidor");
+      await db().countFollow(me(), "followers");
+      diag(box, "ok", "Chat e seguidores funcionando", "Seu perfil público está salvo no Firestore.");
+    }catch(e){
+      diag(box, "bad", "Não funcionou", esc(errText(e)));
+    }
+  }
+
+  return { start, stop, sync, nameFree, render, renderUserView, renderChatView, fillCounts, onLeave, check, updateBadge };
+})();
+
+const renderSocial   = () => Social.render();
+const renderUserView = () => Social.renderUserView();
+const renderChatView = () => Social.renderChatView();
