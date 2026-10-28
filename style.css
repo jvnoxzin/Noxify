@@ -1659,7 +1659,11 @@ body[data-view="chat"] .mini{ display:none; }
 }
 
 .chat-top .avatar-btn{ background-size:cover; }
+.chat-title-wrap{ display:flex; flex-direction:column; min-width:0; flex:1; }
 .chat-title{ font-weight:800; font-size:17px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chat-meta{ font-size:11px; color:var(--muted); margin-top:2px; }
+.chat-call-actions{ display:flex; align-items:center; gap:4px; margin-left:auto; }
+.call-btn{ width:36px; height:36px; }
 
 .chat-msgs{
   flex:1;
@@ -1683,6 +1687,27 @@ body[data-view="chat"] .mini{ display:none; }
 .bubble.mine{ align-self:flex-end; background:var(--accent-deep); border-bottom-right-radius:4px; }
 .bubble.theirs{ align-self:flex-start; background:var(--surface2); border-bottom-left-radius:4px; }
 
+.chat-toolbar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  padding:8px 10px 0;
+  border-top:1px solid var(--line);
+}
+
+.chat-quick{
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--text);
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:12px;
+  cursor:pointer;
+  transition:transform .15s ease, background .15s ease;
+}
+
+.chat-quick:active{ transform:translateY(1px) scale(.98); }
+
 .chat-form{
   display:flex;
   gap:8px;
@@ -1701,6 +1726,101 @@ body[data-view="chat"] .mini{ display:none; }
 }
 
 .chat-form .send{ background:var(--accent); flex-shrink:0; }
+
+.emoji-btn{
+  font-size:18px;
+  line-height:1;
+}
+
+.call-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(5,3,8,.8);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:80;
+  padding:16px;
+}
+
+.call-panel{
+  width:min(100%, 460px);
+  background:rgba(18,14,25,.96);
+  border:1px solid rgba(168,85,247,.3);
+  border-radius:20px;
+  overflow:hidden;
+  box-shadow:0 30px 80px rgba(0,0,0,.45);
+}
+
+.call-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px 14px;
+  border-bottom:1px solid var(--line);
+  font-weight:700;
+}
+
+.call-stage{
+  position:relative;
+  height:320px;
+  background:radial-gradient(circle at center, #2b1839, #120d19 55%);
+}
+
+#remoteVideo,
+#localVideo{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  background:#100b15;
+}
+
+#localVideo{
+  width:108px;
+  height:146px;
+  right:14px;
+  bottom:14px;
+  border-radius:14px;
+  border:2px solid rgba(255,255,255,.2);
+  object-fit:cover;
+  background:#1c1126;
+  z-index:2;
+}
+
+.call-status{
+  padding:10px 14px 0;
+  color:var(--muted);
+  font-size:13px;
+}
+
+.call-controls{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  padding:16px 14px 18px;
+}
+
+.call-action{
+  flex:1;
+  background:var(--surface2);
+  color:#fff;
+  border:1px solid var(--line);
+  border-radius:999px;
+  min-height:42px;
+  font-weight:700;
+}
+
+.call-action.danger{
+  background:rgba(248,113,113,.18);
+  border-color:rgba(248,113,113,.45);
+  color:#ffd6d6;
+}
+
+.call-action[data-state="off"]{
+  opacity:.6;
+}
 
 
 /* =========================
