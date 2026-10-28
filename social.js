@@ -18,8 +18,30 @@ const Social = (() => {
     unsubMsgs: null,
     startedFor: null,
     firstSnap: true,
-    searchSeq: 0
+    searchSeq: 0,
+    quickPanelOpen: false,
+    emojiIndex: 0,
+    callState: null,
+    callType: "audio",
+    callPeer: null,
+    callSessionUnsub: null,
+    localStream: null,
+    peerConnection: null,
+    callCandidates: []
   };
+
+  const CHAT_QUICK_TEXT = [
+    "Oi 👋",
+    "Tudo bem?",
+    "Vamos ouvir uma música?",
+    "Legal! 🎵",
+    "Me manda sua playlist",
+    "Tô nessa! 🔥",
+    "Vou ouvir depois 🎧",
+    "Que vibe! 😍"
+  ];
+
+  const CHAT_EMOJIS = ["😊", "😂", "🔥", "🎵", "💜", "😎", "❤️", "✨"];
 
   const db  = () => window.NoxDB;
   const me  = () => (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null;
@@ -481,6 +503,42 @@ const Social = (() => {
     if (id === me()) return;
     S.peer = id;
     showView("chat", currentView === "user" ? "user" : "social");
+    watchCallSessionForActiveChat();
+  }
+
+  function setChatInputValue(value){
+    const input = document.getElementById("chatInput");
+    if (!input) return;
+    input.value = value;
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+
+  function toggleChatToolbar(forceOpen){
+    const toolbar = document.getElementById("chatToolbar");
+    if (!toolbar) return;
+    const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !S.quickPanelOpen;
+    S.quickPanelOpen = shouldOpen;
+    toolbar.hidden = !shouldOpen;
+  }
+
+  function insertEmoji(){
+    const emoji = CHAT_EMOJIS[S.emojiIndex % CHAT_EMOJIS.length];
+    S.emojiIndex += 1;
+    const input = document.getElementById("chatInput");
+    if (!input) return;
+    const prefix = input.value.trim() ? input.value + " " : "";
+    input.value = prefix + emoji;
+    input.focus();
+  }
+
+  function addQuickMessage(text){
+    const input = document.getElementById("chatInput");
+    if (!input) return;
+    if (!input.value.trim()){ input.value = text; }
+    else { input.value = input.value.trim() + " " + text; }
+    input.focus();
+    toggleChatToolbar(false);
   }
 
   async function renderChatView(){
@@ -489,11 +547,13 @@ const Social = (() => {
     if (!peer) return;
 
     $("chatTitle").textContent = "…";
+    $("chatMeta").textContent = "Disponível";
     $("chatMsgs").innerHTML = "";
 
     const u = await userInfo(peer);
     if (S.peer !== peer) return;
     $("chatTitle").textContent = u.name;
+    $("chatMeta").textContent = "Online agora";
     paintAvatar($("chatAvatar"), u);
 
     const cid = chatIdWith(peer);
@@ -519,6 +579,301 @@ const Social = (() => {
     });
   }
 
+  function getCallSessionId(otherUid){
+    return [me(), otherUid].sort().join("_");
+  }
+
+  function updateCallStatus(text){
+    const el = document.getElementById("callStatus");
+    if (el) el.textContent = text;
+  }
+
+  function setCallOverlay(show){
+    const overlay = document.getElementById("callOverlay");
+    if (!overlay) return;
+    overlay.hidden = !show;
+    document.body.classList.toggle("no-scroll", show);
+  }
+
+  async function ensureCallMedia(type){
+    const constraints = {
+      audio: true,
+      video: type === "video"
+    };
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("Este navegador não suporta chamadas de voz/vídeo.");
+    }
+
+    if (S.localStream) {
+      S.localStream.getTracks().forEach((track) => track.stop());
+    }
+
+    S.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    const localVideo = document.getElementById("localVideo");
+    if (localVideo) {
+      localVideo.srcObject = S.localStream;
+      localVideo.muted = true;
+    }
+    return S.localStream;
+  }
+
+  function stopLocalCallTracks(){
+    if (S.localStream) {
+      S.localStream.getTracks().forEach((track) => track.stop());
+      S.localStream = null;
+    }
+    const localVideo = document.getElementById("localVideo");
+    if (localVideo) localVideo.srcObject = null;
+    const remoteVideo = document.getElementById("remoteVideo");
+    if (remoteVideo) remoteVideo.srcObject = null;
+  }
+
+  function cleanupPeerConnection(){
+    if (S.peerConnection) {
+      S.peerConnection.onicecandidate = null;
+      S.peerConnection.ontrack = null;
+      S.peerConnection.onconnectionstatechange = null;
+      S.peerConnection.close();
+      S.peerConnection = null;
+    }
+    S.callCandidates = [];
+  }
+
+  async function setupPeerConnection(type){
+    if (!window.RTCPeerConnection) {
+      throw new Error("WebRTC não está disponível neste navegador.");
+    }
+
+    cleanupPeerConnection();
+    S.peerConnection = new RTCPeerConnection({
+      iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }]
+    });
+
+    S.peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        S.callCandidates.push(event.candidate.toJSON());
+      }
+    };
+
+    S.peerConnection.ontrack = (event) => {
+      const remoteVideo = document.getElementById("remoteVideo");
+      if (remoteVideo && event.streams && event.streams[0]) {
+        remoteVideo.srcObject = event.streams[0];
+      }
+    };
+
+    S.peerConnection.onconnectionstatechange = () => {
+      const state = S.peerConnection?.connectionState || "new";
+      if (state === "connected") updateCallStatus("Conectado");
+      else if (state === "connecting") updateCallStatus("Conectando...");
+      else if (state === "failed") updateCallStatus("Conexão falhou");
+    };
+
+    if (S.localStream) {
+      S.localStream.getTracks().forEach((track) => {
+        S.peerConnection.addTrack(track, S.localStream);
+      });
+    }
+
+    const remoteVideo = document.getElementById("remoteVideo");
+    if (remoteVideo && type === "video") {
+      remoteVideo.style.display = "block";
+    }
+  }
+
+  async function startCall(type){
+    const bad = unavailable();
+    if (bad){ showToast(bad); return; }
+    if (!S.peer){ showToast("Abra uma conversa antes de iniciar a chamada."); return; }
+
+    S.callType = type || "audio";
+    S.callPeer = S.peer;
+    S.callState = "dialing";
+
+    try{
+      await ensureCallMedia(S.callType);
+      await setupPeerConnection(S.callType);
+
+      document.getElementById("callTitle").textContent = "Chamada com " + (await userInfo(S.peer)).name;
+      updateCallStatus("Solicitando conexão...");
+      setCallOverlay(true);
+
+      const sessionId = getCallSessionId(S.peer);
+      await db().upsertCallSession(sessionId, {
+        type: S.callType,
+        status: "dialing",
+        caller: me(),
+        members: [me(), S.peer].sort(),
+        lastSignal: Date.now()
+      });
+
+      if (S.callType === "video") {
+        const remoteVideo = document.getElementById("remoteVideo");
+        if (remoteVideo) remoteVideo.style.display = "block";
+      }
+
+      showToast(S.callType === "video" ? "Chamada de vídeo iniciada" : "Chamada de voz iniciada");
+    }catch(err){
+      cleanupPeerConnection();
+      stopLocalCallTracks();
+      setCallOverlay(false);
+      showToast(err && err.message ? err.message : "Não foi possível iniciar a chamada");
+    }
+  }
+
+  async function acceptCall(payload){
+    if (!payload || !payload.caller || payload.caller === me()) return;
+    S.callType = payload.type || "audio";
+    S.callPeer = payload.caller;
+    S.callState = "connecting";
+
+    try{
+      await ensureCallMedia(S.callType);
+      await setupPeerConnection(S.callType);
+      setCallOverlay(true);
+      document.getElementById("callTitle").textContent = "Chamada com " + (await userInfo(payload.caller)).name;
+      updateCallStatus("Aceitando chamada...");
+
+      const sessionId = getCallSessionId(payload.caller);
+      await db().upsertCallSession(sessionId, {
+        type: S.callType,
+        status: "ringing",
+        callee: me(),
+        members: [me(), payload.caller].sort(),
+        lastSignal: Date.now()
+      });
+
+      const offer = payload.offer;
+      if (offer) {
+        await S.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await S.peerConnection.createAnswer();
+        await S.peerConnection.setLocalDescription(answer);
+        await db().pushCallEvent(sessionId, { type: "answer", from: me(), data: answer, candidate: null });
+        await db().upsertCallSession(sessionId, { status: "connected", lastSignal: Date.now() });
+        updateCallStatus("Chamada conectada");
+      }
+    }catch(err){
+      console.warn("acceptCall error", err);
+      updateCallStatus("Não foi possível aceitar a chamada");
+    }
+  }
+
+  function closeCallUI(){
+    cleanupPeerConnection();
+    stopLocalCallTracks();
+    S.callState = null;
+    S.callPeer = null;
+    setCallOverlay(false);
+    if (S.callSessionUnsub) { S.callSessionUnsub(); S.callSessionUnsub = null; }
+  }
+
+  async function endCall(){
+    if (!S.callPeer) return;
+    const sessionId = getCallSessionId(S.callPeer);
+    try{ await db().clearCallSession(sessionId); }catch(e){}
+    closeCallUI();
+    showToast("Chamada encerrada");
+  }
+
+  async function handleCallSession(payload){
+    if (!payload || !payload.members) return;
+    const meUid = me();
+    const other = payload.members.find((x) => x !== meUid);
+    if (!other) return;
+
+    if (payload.status === "dialing" && payload.caller && payload.caller !== meUid) {
+      const accept = await askConfirm("Receber chamada de " + (await userInfo(payload.caller)).name + "?", "Atender");
+      if (accept) {
+        await acceptCall(payload);
+      }
+    }
+
+    if (payload.status === "connected" && payload.caller && payload.caller !== meUid) {
+      updateCallStatus("Conectado");
+    }
+  }
+
+  async function watchCallSessionForActiveChat(){
+    if (!S.peer) return;
+    const sessionId = getCallSessionId(S.peer);
+    if (S.callSessionUnsub) S.callSessionUnsub();
+    S.callSessionUnsub = db().subscribeCallSession(sessionId, async (payload) => {
+      if (!payload) return;
+      await handleCallSession(payload);
+    }, (err) => console.warn("call session error", err));
+  }
+
+  document.addEventListener("click", (e) => {
+    const quick = e.target.closest("[data-chat-quick]");
+    if (quick){
+      addQuickMessage(quick.dataset.chatQuick);
+      return;
+    }
+
+    const optionBtn = e.target.closest("#chatOptionsBtn");
+    if (optionBtn){
+      toggleChatToolbar();
+      return;
+    }
+
+    const emojiBtn = e.target.closest("#chatEmojiBtn");
+    if (emojiBtn){
+      insertEmoji();
+      return;
+    }
+
+    const voiceCall = e.target.closest("#chatVoiceCallBtn");
+    if (voiceCall){
+      startCall("audio");
+      return;
+    }
+
+    const videoCall = e.target.closest("#chatVideoCallBtn");
+    if (videoCall){
+      startCall("video");
+      return;
+    }
+
+    const endCallBtn = e.target.closest("#callEndBtn");
+    if (endCallBtn){
+      endCall();
+      return;
+    }
+
+    const micBtn = e.target.closest("#callMicBtn");
+    if (micBtn){
+      const audioTrack = S.localStream && S.localStream.getAudioTracks()[0];
+      if (audioTrack){
+        audioTrack.enabled = !audioTrack.enabled;
+        micBtn.dataset.state = audioTrack.enabled ? "on" : "off";
+        micBtn.textContent = audioTrack.enabled ? "Mic" : "Mic desligado";
+      }
+      return;
+    }
+
+    const camBtn = e.target.closest("#callCamBtn");
+    if (camBtn){
+      const videoTrack = S.localStream && S.localStream.getVideoTracks()[0];
+      if (videoTrack){
+        videoTrack.enabled = !videoTrack.enabled;
+        camBtn.dataset.state = videoTrack.enabled ? "on" : "off";
+        camBtn.textContent = videoTrack.enabled ? "Câmera" : "Câmera desligada";
+      }
+      return;
+    }
+
+    const closeCallBtn = e.target.closest("#callCloseBtn");
+    if (closeCallBtn){
+      endCall();
+      return;
+    }
+
+    if (!e.target.closest("#chatToolbar") && !e.target.closest("#chatOptionsBtn")){
+      toggleChatToolbar(false);
+    }
+  });
+
   $("chatForm").addEventListener("submit", async (e) => {
 
     e.preventDefault();
@@ -528,6 +883,7 @@ const Social = (() => {
     if (!text || !S.peer || unavailable()) return;
 
     input.value = "";
+    toggleChatToolbar(false);
     try{
       await db().sendMessage(chatIdWith(S.peer), [me(), S.peer].sort(), me(), text);
     }catch(err){
@@ -537,9 +893,18 @@ const Social = (() => {
   });
 
   function onLeave(from, to){
-    if (from === "chat" && to !== "chat" && S.unsubMsgs){
-      S.unsubMsgs();
-      S.unsubMsgs = null;
+    if (from === "chat" && to !== "chat"){
+      if (S.unsubMsgs){
+        S.unsubMsgs();
+        S.unsubMsgs = null;
+      }
+      if (S.callSessionUnsub){
+        S.callSessionUnsub();
+        S.callSessionUnsub = null;
+      }
+      if (to !== "chat" && S.callState){
+        endCall();
+      }
     }
   }
 
