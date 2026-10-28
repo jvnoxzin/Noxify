@@ -284,6 +284,32 @@ window.NoxDB = {
     }, onError);
   },
 
+  subscribeCallSession(chatId, onData, onError){
+    return onSnapshot(doc(db, "callSessions", chatId), (snap) => {
+      onData(snap.exists() ? snap.data() : null);
+    }, onError);
+  },
+
+  async upsertCallSession(chatId, patch){
+    const ref = doc(db, "callSessions", chatId);
+    const cur = await getDoc(ref);
+    const base = cur.exists() ? cur.data() : { members: chatId.split("_"), events: [] };
+    await setDoc(ref, Object.assign({}, base, { members: chatId.split("_"), updatedAt: Date.now(), ...patch }), { merge: true });
+  },
+
+  async pushCallEvent(chatId, event){
+    const ref = doc(db, "callSessions", chatId);
+    const cur = await getDoc(ref);
+    const base = cur.exists() ? cur.data() : { members: chatId.split("_"), events: [] };
+    const events = Array.isArray(base.events) ? base.events.slice() : [];
+    events.push(Object.assign({ id: crypto.randomUUID(), at: Date.now() }, event));
+    await setDoc(ref, { ...base, members: chatId.split("_"), events, updatedAt: Date.now() }, { merge: true });
+  },
+
+  async clearCallSession(chatId){
+    await deleteDoc(doc(db, "callSessions", chatId));
+  },
+
   async sendMessage(chatId, members, from, text){
     const b = writeBatch(db);
     b.set(doc(db, "chats", chatId), {
