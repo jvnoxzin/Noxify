@@ -41,7 +41,22 @@ const Social = (() => {
     "Que vibe! 😍"
   ];
 
-  const CHAT_EMOJIS = ["😊", "😂", "🔥", "🎵", "💜", "😎", "❤️", "✨"];
+  const CHAT_EMOJIS = ["😊", "😂", "🔥", "🎵", "💜", "😎", "❤️", "✨", "😍", "🥰", "😆", "🤩", "👍", "🎉", "🥳", "✨"];
+
+  const CHAT_BG_PRESETS = {
+    default: "linear-gradient(180deg, rgba(18, 12, 24, 0.8), rgba(11, 10, 17, 0.9))",
+    night: "radial-gradient(circle at top, rgba(59,130,246,0.18), transparent 40%), linear-gradient(180deg, rgba(15,22,42,0.85), rgba(10,10,18,0.92))",
+    sunset: "radial-gradient(circle at top, rgba(251,146,60,0.22), transparent 32%), linear-gradient(135deg, rgba(127,29,29,0.62), rgba(76,29,149,0.56), rgba(15,23,42,0.86))",
+    ocean: "radial-gradient(circle at top, rgba(45,212,191,0.2), transparent 35%), linear-gradient(180deg, rgba(2,6,23,0.86), rgba(12,74,110,0.7))",
+    violet: "radial-gradient(circle at center, rgba(168,85,247,0.24), transparent 36%), linear-gradient(135deg, rgba(88,28,135,0.7), rgba(17,24,39,0.8))",
+    stars: "radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1.8px) 0 0/18px 18px, linear-gradient(180deg, rgba(10,14,28,0.8), rgba(26,26,46,0.9))"
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", buildEmojiPicker);
+  } else {
+    buildEmojiPicker();
+  }
 
   const db  = () => window.NoxDB;
   const me  = () => (window.auth && window.auth.currentUser) ? window.auth.currentUser.uid : null;
@@ -503,6 +518,7 @@ const Social = (() => {
     if (id === me()) return;
     S.peer = id;
     showView("chat", currentView === "user" ? "user" : "social");
+    loadChatBackground();
     watchCallSessionForActiveChat();
   }
 
@@ -522,14 +538,94 @@ const Social = (() => {
     toolbar.hidden = !shouldOpen;
   }
 
-  function insertEmoji(){
-    const emoji = CHAT_EMOJIS[S.emojiIndex % CHAT_EMOJIS.length];
-    S.emojiIndex += 1;
+  function buildEmojiPicker(){
+    const grid = document.getElementById("emojiGrid");
+    if (!grid) return;
+    grid.innerHTML = CHAT_EMOJIS.map((emoji) =>
+      '<button type="button" data-emoji="' + esc(emoji) + '" aria-label="Selecionar emoji ' + esc(emoji) + '">' + emoji + '</button>'
+    ).join("");
+  }
+
+  function chatBgKey(){
+    return "noxChatBg:" + (S.peer || "default");
+  }
+
+  function applyChatBackground(bg){
+    const msgs = document.getElementById("chatMsgs");
+    if (!msgs) return;
+
+    if (!bg){
+      msgs.style.background = CHAT_BG_PRESETS.default;
+      msgs.style.backgroundSize = "cover";
+      msgs.style.backgroundPosition = "center";
+      msgs.style.backgroundRepeat = "no-repeat";
+      return;
+    }
+
+    msgs.style.background = bg;
+    msgs.style.backgroundSize = "cover";
+    msgs.style.backgroundPosition = "center";
+    msgs.style.backgroundRepeat = "no-repeat";
+  }
+
+  function setChatBackgroundPreset(name){
+    const preset = CHAT_BG_PRESETS[name] || CHAT_BG_PRESETS.default;
+    applyChatBackground(preset);
+    document.querySelectorAll(".bg-option").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.bgPreset === name);
+    });
+    try{
+      localStorage.setItem(chatBgKey(), JSON.stringify({ type: "preset", name }));
+    }catch(e){}
+  }
+
+  function setChatBackgroundCustom(dataUrl){
+    const safeUrl = String(dataUrl || "").replace(/"/g, "%22");
+    const bg = 'linear-gradient(180deg, rgba(10,10,18,0.18), rgba(10,10,18,0.38)), url("' + safeUrl + '") center/cover no-repeat';
+    applyChatBackground(bg);
+    try{
+      localStorage.setItem(chatBgKey(), JSON.stringify({ type: "custom", value: dataUrl }));
+    }catch(e){}
+  }
+
+  function loadChatBackground(){
+    if (!S.peer) return;
+    try{
+      const raw = localStorage.getItem(chatBgKey());
+      if (!raw) {
+        setChatBackgroundPreset("default");
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.type === "custom" && parsed.value) {
+        setChatBackgroundCustom(parsed.value);
+        return;
+      }
+      if (parsed && parsed.type === "preset") {
+        setChatBackgroundPreset(parsed.name || "default");
+        return;
+      }
+    }catch(e){}
+    setChatBackgroundPreset("default");
+  }
+
+  function toggleEmojiPicker(forceOpen){
+    const picker = document.getElementById("emojiPicker");
+    if (!picker) return;
+    const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : picker.hidden;
+    picker.hidden = !shouldOpen;
+    if (shouldOpen) toggleChatToolbar(false);
+  }
+
+  function insertEmoji(emojiText){
     const input = document.getElementById("chatInput");
     if (!input) return;
+    const selected = emojiText || CHAT_EMOJIS[S.emojiIndex % CHAT_EMOJIS.length];
+    S.emojiIndex += 1;
     const prefix = input.value.trim() ? input.value + " " : "";
-    input.value = prefix + emoji;
+    input.value = prefix + selected;
     input.focus();
+    toggleEmojiPicker(false);
   }
 
   function addQuickMessage(text){
@@ -555,6 +651,7 @@ const Social = (() => {
     $("chatTitle").textContent = u.name;
     $("chatMeta").textContent = "Online agora";
     paintAvatar($("chatAvatar"), u);
+    loadChatBackground();
 
     const cid = chatIdWith(peer);
     if (S.unsubMsgs) S.unsubMsgs();
@@ -565,10 +662,20 @@ const Social = (() => {
       const stick = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
 
       box.innerHTML = msgs.length
-        ? msgs.map((m) =>
-            '<div class="bubble ' + (m.from === me() ? "mine" : "theirs") + '">' +
-            '<span>' + esc(m.text) + '</span><time>' + fmtTime(m.at) + '</time></div>'
-          ).join("")
+        ? msgs.map((m) => {
+            if (m.type === "sticker" && m.image) {
+              return '<div class="bubble ' + (m.from === me() ? "mine" : "theirs") + '">' +
+                '<img class="inline-sticker" src="' + esc(m.image) + '" alt="' + esc(m.alt || "figurinha") + '">' +
+                '<time>' + fmtTime(m.at) + '</time></div>';
+            }
+            if (m.type === "audio" && m.audio) {
+              return '<div class="bubble ' + (m.from === me() ? "mine" : "theirs") + '">' +
+                '<audio controls src="' + esc(m.audio) + '"></audio>' +
+                '<time>' + fmtTime(m.at) + '</time></div>';
+            }
+            return '<div class="bubble ' + (m.from === me() ? "mine" : "theirs") + '">' +
+              '<span>' + esc(m.text || "") + '</span><time>' + fmtTime(m.at) + '</time></div>';
+          }).join("")
         : '<div class="empty">Diga oi para ' + esc(u.name) + ' 👋</div>';
 
       if (stick || box.dataset.first !== cid){ box.scrollTop = box.scrollHeight; box.dataset.first = cid; }
@@ -650,9 +757,16 @@ const Social = (() => {
       iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }]
     });
 
-    S.peerConnection.onicecandidate = (event) => {
-      if (event.candidate) {
-        S.callCandidates.push(event.candidate.toJSON());
+    S.peerConnection.onicecandidate = async (event) => {
+      if (!event.candidate) return;
+      const cand = event.candidate.toJSON();
+      S.callCandidates.push(cand);
+      const sessionId = getCallSessionId(S.callPeer || S.peer);
+      if (!sessionId) return;
+      try {
+        await db().pushCallEvent(sessionId, { type: "candidate", from: me(), data: cand });
+      } catch (err) {
+        console.warn("Erro ao enviar candidate da chamada:", err);
       }
     };
 
@@ -700,11 +814,15 @@ const Social = (() => {
       setCallOverlay(true);
 
       const sessionId = getCallSessionId(S.peer);
+      const offer = await S.peerConnection.createOffer();
+      await S.peerConnection.setLocalDescription(offer);
       await db().upsertCallSession(sessionId, {
         type: S.callType,
         status: "dialing",
         caller: me(),
         members: [me(), S.peer].sort(),
+        offer: offer.toJSON(),
+        answer: null,
         lastSignal: Date.now()
       });
 
@@ -749,8 +867,11 @@ const Social = (() => {
         await S.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await S.peerConnection.createAnswer();
         await S.peerConnection.setLocalDescription(answer);
-        await db().pushCallEvent(sessionId, { type: "answer", from: me(), data: answer, candidate: null });
-        await db().upsertCallSession(sessionId, { status: "connected", lastSignal: Date.now() });
+        await db().upsertCallSession(sessionId, {
+          status: "connected",
+          answer: answer.toJSON(),
+          lastSignal: Date.now()
+        });
         updateCallStatus("Chamada conectada");
       }
     }catch(err){
@@ -782,6 +903,26 @@ const Social = (() => {
     const other = payload.members.find((x) => x !== meUid);
     if (!other) return;
 
+    if (Array.isArray(payload.events)) {
+      for (const event of payload.events) {
+        if (!event || event.from === meUid || event.type !== "candidate" || !event.data || !S.peerConnection) continue;
+        try {
+          await S.peerConnection.addIceCandidate(new RTCIceCandidate(event.data));
+        } catch (err) {
+          console.warn("ICE candidate rejeitado:", err);
+        }
+      }
+    }
+
+    if (payload.answer && payload.caller === meUid && S.peerConnection && !S.peerConnection.remoteDescription) {
+      try {
+        await S.peerConnection.setRemoteDescription(new RTCSessionDescription(payload.answer));
+        updateCallStatus("Conectado");
+      } catch (err) {
+        console.warn("Erro ao aplicar resposta da chamada:", err);
+      }
+    }
+
     if (payload.status === "dialing" && payload.caller && payload.caller !== meUid) {
       const accept = await askConfirm("Receber chamada de " + (await userInfo(payload.caller)).name + "?", "Atender");
       if (accept) {
@@ -804,6 +945,62 @@ const Social = (() => {
     }, (err) => console.warn("call session error", err));
   }
 
+  function openStickerPicker(){
+    const input = document.getElementById("chatStickerInput");
+    if (!input) return;
+    input.click();
+  }
+
+  function openAudioPicker(){
+    const input = document.getElementById("chatAudioInput");
+    if (!input) return;
+    input.click();
+  }
+
+  async function sendSticker(file){
+    if (!file || !S.peer || unavailable()) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("Selecione uma imagem válida para a figurinha.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try{
+        await db().sendMessage(chatIdWith(S.peer), [me(), S.peer].sort(), me(), "", {
+          type: "sticker",
+          image: String(reader.result || ""),
+          alt: file.name || "figurinha"
+        });
+      }catch(err){
+        showToast(errText(err));
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function sendAudio(file){
+    if (!file || !S.peer || unavailable()) return;
+    if (!file.type.startsWith("audio/")) {
+      showToast("Selecione um arquivo de áudio válido.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try{
+        await db().sendMessage(chatIdWith(S.peer), [me(), S.peer].sort(), me(), "", {
+          type: "audio",
+          audio: String(reader.result || ""),
+          alt: file.name || "áudio"
+        });
+      }catch(err){
+        showToast(errText(err));
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
   document.addEventListener("click", (e) => {
     const quick = e.target.closest("[data-chat-quick]");
     if (quick){
@@ -819,7 +1016,39 @@ const Social = (() => {
 
     const emojiBtn = e.target.closest("#chatEmojiBtn");
     if (emojiBtn){
-      insertEmoji();
+      toggleEmojiPicker();
+      return;
+    }
+
+    const emojiPick = e.target.closest("[data-emoji]");
+    if (emojiPick){
+      insertEmoji(emojiPick.dataset.emoji);
+      return;
+    }
+
+    const bgPreset = e.target.closest("[data-bg-preset]");
+    if (bgPreset){
+      setChatBackgroundPreset(bgPreset.dataset.bgPreset);
+      toggleChatToolbar(false);
+      return;
+    }
+
+    const bgUpload = e.target.closest("#chatBgUploadBtn");
+    if (bgUpload){
+      const input = document.getElementById("chatBgInput");
+      if (input) input.click();
+      return;
+    }
+
+    const stickerBtn = e.target.closest("#chatStickerBtn");
+    if (stickerBtn){
+      openStickerPicker();
+      return;
+    }
+
+    const audioBtn = e.target.closest("#chatAudioBtn");
+    if (audioBtn){
+      openAudioPicker();
       return;
     }
 
@@ -884,12 +1113,46 @@ const Social = (() => {
 
     input.value = "";
     toggleChatToolbar(false);
+    toggleEmojiPicker(false);
     try{
       await db().sendMessage(chatIdWith(S.peer), [me(), S.peer].sort(), me(), text);
     }catch(err){
       input.value = text;
       showToast(errText(err));
     }
+  });
+
+  $("chatStickerInput").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      await sendSticker(file);
+      e.target.value = "";
+    }
+  });
+
+  $("chatAudioInput").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      await sendAudio(file);
+      e.target.value = "";
+    }
+  });
+
+  $("chatBgInput").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("Selecione uma imagem válida para o fundo do chat.");
+      e.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setChatBackgroundCustom(String(reader.result || ""));
+      toggleChatToolbar(false);
+      e.target.value = "";
+    };
+    reader.readAsDataURL(file);
   });
 
   function onLeave(from, to){
