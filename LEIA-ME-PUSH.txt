@@ -1,0 +1,50 @@
+NOXIFY — NOTIFICAÇÕES PUSH (chamada e mensagem com o app fechado)
+=================================================================
+
+COMO FUNCIONA
+- push.js (no app) cria a "assinatura" do aparelho e guarda no Firestore (pushSubs/{uid}).
+- api/push.js (função da Vercel) confere o login, e manda o aviso para o aparelho da outra pessoa.
+- sw.js mostra a notificação. Se o app já está aberto na tela, ela não aparece.
+- Não usa Cloud Functions (que exigem plano pago do Firebase): roda na Vercel, no plano gratuito.
+
+ARQUIVOS NOVOS/ALTERADOS NO GITHUB
+  novos:     push.js, api/push.js (pasta "api"), package.json, LEIA-ME-PUSH.txt
+  alterados: sw.js, db.js, calls.js, voice.js, social.js, settings.js, index.html
+  Firebase:  firestore.rules (publicar de novo)
+
+PASSO A PASSO (faça nesta ordem)
+
+1) Firebase — regras
+   Console > Firestore Database > Regras > cole o firestore.rules > Publicar.
+   (ganhou o bloco "pushSubs")
+
+2) Firebase — chave da conta de serviço (SECRETA)
+   Console > engrenagem > Configurações do projeto > Contas de serviço >
+   "Gerar nova chave privada". Baixa um arquivo .json.
+   NUNCA coloque esse arquivo no GitHub nem mande para ninguém.
+
+3) Vercel — variáveis de ambiente
+   Vercel > seu projeto > Settings > Environment Variables. Crie estas 4
+   (marque Production, Preview e Development):
+
+     FIREBASE_SERVICE_ACCOUNT = (abra o .json do passo 2, copie TUDO e cole)
+     VAPID_PUBLIC_KEY         = BBE681hJsuDG1h5nHdzaKeQ4wo03kZLsQQbGnnB8BKx4DwUKP3stqKQFS313uS-dZUYQksiGUHv6A9x21cCPTDg
+     VAPID_PRIVATE_KEY        = (a chave privada que eu te enviei no chat — só aqui, nunca no GitHub)
+     VAPID_SUBJECT            = mailto:seu-email@exemplo.com
+
+   A chave pública acima já está dentro do push.js. As duas precisam ser o mesmo par.
+
+4) GitHub — suba os arquivos (Add file > Upload files; o "api/push.js" precisa ficar
+   dentro de uma pasta chamada api). Depois, na Vercel, faça um novo deploy
+   (Deployments > ... > Redeploy) para ele ler as variáveis.
+
+5) No celular: abra o Noxify > Perfil > Configurações > Notificações >
+   "Ativar notificações" > permitir. Depois toque em "Enviar notificação de teste".
+
+LIMITES
+- iPhone: só funciona com o app instalado na Tela de Início (iOS 16.4 ou mais novo).
+- Android: funciona no Chrome, de preferência com o app instalado.
+- A notificação de chamada não toca toque: ela só avisa. O toque começa quando você abre o app.
+- Economia de bateria do celular pode atrasar notificações.
+- A função limita pedidos muito rápidos e só avisa quem já tem uma conversa com você.
+- Se a chave privada vazar, gere outro par (VAPID) e troque no push.js e na Vercel.
