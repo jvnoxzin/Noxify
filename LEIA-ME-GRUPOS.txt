@@ -1,0 +1,93 @@
+NOXIFY — GRUPOS  (leia antes de subir os arquivos)
+==================================================
+
+O QUE É
+  Uma nova aba "Grupos" dentro do Noxify (5º botão da barra de baixo), usando o seu
+  login, seus perfis e o Firebase que já existe. Não é outro app.
+
+ARQUIVOS NOVOS / ALTERADOS  (suba tudo, no computador: Add file > Upload files)
+  NOVOS:    gdb.js  groups.js  gchat.js  gadmin.js  gvoice.js  groups.css
+  ALTERADOS: index.html  sw.js  push.js  firestore.rules  api/push.js
+  ATENÇÃO: api/push.js precisa ficar DENTRO de uma pasta chamada "api".
+  (Antes você subiu "api-push.js" na raiz: ele NÃO funciona assim. Apague esse e crie
+   "api/push.js": no GitHub, Add file > Create new file, digite  api/push.js  no nome
+   — a barra cria a pasta — e cole o conteúdo.)
+
+PASSO OBRIGATÓRIO — REGRAS DO FIREBASE
+  Sem isso os grupos mostram "Sem permissão".
+  Firebase Console > Firestore Database > Regras > apague tudo, cole o conteúdo do
+  firestore.rules novo > Publicar.
+  (O arquivo já contém as regras de antes: usuários, chats, chamadas, push.)
+
+OPCIONAL — VÍDEOS E DOCUMENTOS (Supabase)
+  Fotos e áudios vão dentro da mensagem (Firebase). Vídeos e documentos são grandes demais
+  e vão para o Supabase. Se não fizer isso, tudo funciona, menos enviar vídeo/documento.
+  Supabase > SQL Editor > cole e rode:
+
+    insert into storage.buckets (id, name, public, file_size_limit)
+    values ('chatmedia', 'chatmedia', true, 26214400)
+    on conflict (id) do nothing;
+
+    create policy "chatmedia enviar" on storage.objects for insert
+      to anon, authenticated with check (bucket_id = 'chatmedia');
+    create policy "chatmedia ler" on storage.objects for select
+      to anon, authenticated using (bucket_id = 'chatmedia');
+
+  Limites no app: vídeo 25 MB, documento 15 MB.
+  Aviso: o Supabase aqui não confere o login do Firebase; quem tiver a chave pública do app
+  poderia enviar arquivos para esse bucket. Para o futuro: Edge Function com verificação.
+
+NOTIFICAÇÕES COM O APP FECHADO (push de grupos)
+  Usa o mesmo esquema do LEIA-ME-PUSH.txt (variáveis na Vercel etc.). O api/push.js novo
+  também avisa membros de grupos: respeita "silenciar grupo", "silenciar canal",
+  "só menções" e canais privados. Dentro do app (aberto) o aviso é por som + faixa,
+  configurável em Grupos > Minhas configurações.
+
+COMO USAR
+  Criar:      aba Grupos > Criar grupo (foto, banner, regras, público/privado, limite, aprovação).
+  Entrar:     Descobrir (grupos públicos), código de 8 letras, ou link  seusite/?join=CODIGO
+  Convidar:   dentro do grupo > Convidar (validade, nº de usos, copiar link, enviar a um contato).
+  Canais:     Texto, Anúncios, Jogos, Música, Memes, Fotos/vídeos, Info/regras, Voz,
+              privados (por cargo ou pessoa) e temporários (1/6/24 h), modo lento.
+  Mensagens:  texto, foto, vídeo, áudio, documento, enquete; responder, tópico, encaminhar,
+              reagir, editar, apagar, fixar, @menção e @todos, "digitando…", ✓ enviada / ✓✓ vista
+              (toque nos ✓ para ver quem viu), busca, links clicáveis.
+  Cargos:     Dono, Administrador, Moderador, VIP, Membro, Bot + cargos seus (nome, cor, ícone,
+              posição e 15 permissões). Menu do grupo (⋮) > Cargos e permissões.
+  Moderação:  silenciar (10 min a 7 dias), advertir, expulsar, banir/desbanir, pedidos de entrada,
+              denúncias de mensagem/usuário, registro de ações, filtro de palavras, controle de
+              links, proteção contra flood.
+  Voz:        entrar/sair, microfone, volume por pessoa e geral, quem está falando, compartilhar
+              tela (quando o navegador permite; no celular geralmente não).
+  Outros:     apelido por grupo, status online/ausente/offline, eventos com "vou", favoritar e
+              fixar grupos, tema escuro/claro dos grupos, mensagem de boas-vindas.
+
+O QUE FOI TESTADO E O QUE NÃO FOI  (seja honesto com você mesmo antes de divulgar)
+  TESTADO (navegador real + Firebase SIMULADO, 2 usuários): criar grupo, entrar público, entrar por
+  código, sair, expulsar, mensagens/reações/respostas/edição/fixar/enquete/tópico/imagem/busca,
+  silenciar/advertir/cargos/cargo novo, canal privado, filtros e flood, denúncia, convites, eventos,
+  sala de voz entre 2 navegadores (conectou, áudio trafegou, indicador de fala, mudo, sair),
+  layout celular e computador, tema claro. As chamadas e áudios de antes continuam funcionando.
+  NÃO TESTADO (impossível aqui): as REGRAS do Firebase de verdade (sem emulador) — depois de publicar,
+  teste: criar grupo, entrar com outra conta, mandar mensagem, silenciar. Se algo disser "Sem
+  permissão", me mande o erro. Também não testado: Firebase/Supabase reais, push entregue no
+  celular, voz em 4G entre aparelhos reais, compartilhar tela, vídeo/documento (Supabase).
+
+LIMITES CONHECIDOS (de propósito ou por limitação)
+  - Filtro de palavras, links e anti-spam rodam no app (um usuário mal-intencionado com ferramentas
+    técnicas poderia burlar). Silêncio, cargos, banimento, canais privados e permissões de enviar são
+    conferidos nas regras do servidor.
+  - "Entregue" não é rastreado separadamente: ✓ = enviada, ✓✓ = vista por alguém.
+  - "Bots" é um cargo; não existe robô que rode sozinho.
+  - Busca de mensagens: só nas já carregadas (botão "carregar mais").
+  - Sem pré-visualização em cartão de links (o link fica clicável).
+  - Voz em malha: ~6 pessoas por sala. Em redes difíceis precisa servidor TURN (lista TURN_SERVERS no
+    topo do calls.js; vale para chamadas e salas de voz).
+  - O contador de membros é mantido pelo app; quem tem "aprovar entradas" poderia, mexendo no código,
+    distorcê-lo (não dá acesso a nada). Dê essa permissão só a quem confia. O mesmo vale para
+    "Gerenciar cargos": um administrador com essa permissão pode criar cargos poderosos.
+  - Apagar um grupo deixa os dados antigos no banco (ninguém mais consegue ler).
+  - Mensagens são guardadas no Firestore, sem criptografia ponta a ponta. Cota grátis do Firebase:
+    grupos grandes e ativos gastam leituras/escritas; acompanhe o consumo no console.
+  - Mensagens apagadas viram "Mensagem apagada" (o registro continua, sem conteúdo).
+  - Pedidos de entrada só existem para grupos PÚBLICOS com "aprovar". Grupos privados: só por convite.
