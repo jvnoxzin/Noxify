@@ -58,7 +58,7 @@ const GX = (() => {
     my: [], gcache: {}, tab: "mine", unsubMy: null,
     gid: null, g: null, mem: null, members: {}, chans: [], cid: null,
     unsubs: [], lastBy: {}, unread: {}, unsubLast: {},
-    photos: {}, panel: false, prefs: null, hb: 0
+    photos: {}, cos: {}, panel: false, prefs: null, hb: 0
   };
 
   const G = () => window.NoxG;
@@ -137,7 +137,8 @@ const GX = (() => {
     const c = colorsFor(uid || name || "x");
     const url = photo || S.photos[uid] || "";
     const bg = (typeof photoCss === "function" && url) ? photoCss(url) : "";
-    return '<span class="g-av" data-uid="' + esc(uid || "") + '" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * .42) + 'px;background:' +
+    const fr = (typeof Cos !== "undefined" && S.cos[uid]) ? " " + Cos.frameCls(S.cos[uid]) : "";
+    return '<span class="g-av' + fr + '" data-uid="' + esc(uid || "") + '" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * .42) + 'px;background:' +
       (bg || "linear-gradient(135deg," + c[0] + "," + c[1] + ")") + '">' + (bg ? "" : esc(String(name || "?").charAt(0).toUpperCase())) + "</span>";
   }
 
@@ -147,11 +148,12 @@ const GX = (() => {
     if (!todo.length) return;
     await Promise.all(todo.map(async (u) => {
       photoReq[u] = 1;
-      try{ const d = await window.NoxDB.getUser(u); S.photos[u] = (d && d.photo) || ""; }catch(e){ S.photos[u] = ""; }
+      try{ const d = await window.NoxDB.getUser(u); S.photos[u] = (d && d.photo) || ""; S.cos[u] = (d && d.cos) || null; }catch(e){ S.photos[u] = ""; }
     }));
     qa('.g-av[data-uid]').forEach((el) => {
       const u = el.dataset.uid, p = S.photos[u];
       if (p && typeof photoCss === "function" && photoCss(p)){ el.style.background = photoCss(p); el.textContent = ""; }
+      if (typeof Cos !== "undefined" && !el.classList.contains("g-sq")) Cos.frame(el, S.cos[u]);
     });
   }
 

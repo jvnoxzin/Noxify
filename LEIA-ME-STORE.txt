@@ -1,0 +1,29 @@
+NOXIFY — NOX COINS, STORE E NOVA BARRA
+=======================================
+
+1) ARQUIVOS PARA SUBIR NO GITHUB (no computador, mantendo as pastas)
+   NOVOS:      store.js, store.css, api/coins.js, api/_coins.js, api/_catalog.js
+   ALTERADOS:  index.html, app.js, playlists.js, social.js, groups.js, sw.js, gvoice.js
+   NÃO vai pro GitHub: firestore.rules (cole no Firebase Console).
+
+2) CONFIGURAÇÃO (uma vez)
+   a) Firebase Console > Firestore > Regras: apague tudo, cole o firestore.rules novo, Publicar.
+      (Ele impede o usuário de gravar saldo, compras ou "cos" no próprio perfil.)
+   b) Vercel: NÃO precisa de variável nova. Usa a FIREBASE_SERVICE_ACCOUNT do push.
+   c) Depois do deploy ficar Ready, feche e abra o app 2 vezes (cache novo).
+
+3) O QUE TEM
+   - Barra: Início, Biblioteca, Social, Grupos, Store. Buscar virou barra dentro da Biblioteca.
+   - Biblioteca: título, pesquisa, Playlists/Baixadas/Fila, conteúdo, "Navegar por artista" por último.
+     Só aparecem artistas com 3+ músicas (conta músicas distintas, calculado pelos dados).
+   - Perfil: [Editar perfil] [moeda + saldo] [engrenagem]. Toque no saldo = Store > Carteira.
+   - Store: Loja / Inventário / Carteira. Molduras, efeitos, banners, nomes, emblemas, temas.
+   - Diária 10,15,20,25,30,35,50 NC (fuso de São Paulo). Missões. Histórico.
+   - Tudo (saldo, compras, recompensas) é decidido no servidor (api/coins.js) em transações.
+
+4) TESTADO
+   - Servidor das moedas (simulado): 48 testes OK (diária, fuso, compra, duplicada, simultâneas,
+     saldo negativo, equipar item que não tem, missões).
+   - App no Chromium (celular 390px e desktop): 35 testes OK (navegação, busca, artistas, perfil,
+     compra, equipar, efeitos sem bloquear toque, aparência vista por outro usuário, console limpo).
+   NÃO testado: Firebase real, regras do Firestore reais, celular Android físico, deploy na Vercel.
