@@ -1,0 +1,214 @@
+/* =========================================================
+   NOXIFY — store.css
+   Store, Carteira, Inventário, moldura de foto, estilo de nome,
+   emblemas e efeitos nos cantos da tela.
+   Animações só com transform/opacity (leves). Modo "lite" = parado.
+========================================================= */
+
+/* ---------- moeda e saldo ---------- */
+.nc-ic{ display:inline-block; vertical-align:-3px; flex:none; }
+
+.nc-chip{
+  display:inline-flex; align-items:center; gap:6px;
+  height:34px; padding:0 12px 0 8px;
+  border-radius:999px;
+  background:linear-gradient(135deg,rgba(168,85,247,.22),rgba(109,40,217,.12));
+  border:1px solid rgba(192,132,252,.45);
+  color:#fff; font-weight:800; font-size:14px; line-height:1;
+  box-shadow:0 0 12px rgba(168,85,247,.25);
+  transition:transform .15s, box-shadow .15s;
+  white-space:nowrap;
+}
+.nc-chip:active{ transform:scale(.95); }
+.nc-chip em{ font-style:normal; font-size:11px; color:var(--accent2); font-weight:700; }
+.profile-actions{ display:flex; align-items:center; gap:8px; min-width:0; flex-wrap:nowrap; }
+.profile-actions .icon-btn{ width:36px; height:36px; border:1px solid var(--line); }
+@media (max-width:370px){
+  .nc-chip{ padding:0 9px 0 6px; font-size:13px; gap:4px; }
+  .nc-chip em{ display:none; }
+  .profile-actions{ gap:6px; }
+  .profile-actions .pill-btn.small{ padding:8px 12px; }
+}
+
+/* ---------- tela da Store ---------- */
+.st-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.st-top .page-title{ margin:0; }
+.st-seg{
+  display:flex; gap:4px; margin:14px 0 16px; padding:4px;
+  background:var(--surface); border-radius:999px; border:1px solid var(--line);
+}
+.st-seg button{
+  flex:1; padding:9px 6px; border-radius:999px; font-weight:700; font-size:14px; color:var(--muted);
+  transition:background .2s, color .2s;
+}
+.st-seg button.active{ background:linear-gradient(135deg,var(--accent),var(--accent-deep)); color:#fff; box-shadow:0 2px 12px rgba(168,85,247,.35); }
+
+.st-cats{ display:flex; gap:8px; overflow-x:auto; padding:2px 0 12px; scrollbar-width:none; }
+.st-cats::-webkit-scrollbar{ display:none; }
+.st-cat{
+  flex:none; padding:8px 14px; border-radius:999px; font-size:13px; font-weight:700;
+  background:var(--surface); color:var(--muted); border:1px solid var(--line);
+}
+.st-cat.active{ color:#fff; border-color:var(--accent2); background:rgba(168,85,247,.2); }
+
+.st-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+@media (min-width:560px){ .st-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); } }
+
+.st-card{
+  display:flex; flex-direction:column; gap:6px; padding:12px;
+  background:linear-gradient(160deg,var(--surface2),var(--surface));
+  border:1px solid var(--line); border-radius:16px;
+  transition:transform .18s, border-color .2s, box-shadow .2s;
+  animation:stIn .35s ease both;
+}
+.st-card:active{ transform:scale(.98); }
+.st-card.is-eq{ border-color:var(--accent2); box-shadow:0 0 0 1px var(--accent2) inset, 0 0 16px rgba(168,85,247,.2); }
+.st-card.flash{ animation:stFlash 1.2s ease 1; }
+@keyframes stIn{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+@keyframes stFlash{ 0%,60%{ box-shadow:0 0 0 2px var(--accent2), 0 0 24px rgba(192,132,252,.6); } 100%{ box-shadow:none; } }
+
+.st-prev{
+  position:relative; height:96px; border-radius:12px; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.35);
+}
+.st-prev.frame{ overflow:visible; background:radial-gradient(circle,rgba(168,85,247,.12),transparent 70%); }
+.st-av{
+  width:58px; height:58px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:24px; color:#fff; background-size:cover; background-position:center;
+}
+.st-bn{ position:absolute; inset:0; }
+.st-nm{ font-weight:800; font-size:18px; padding:0 8px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.st-bd{ display:flex; filter:drop-shadow(0 0 8px rgba(255,255,255,.25)); }
+.st-none{ font-size:28px; color:var(--muted); }
+.st-th{ display:flex; width:100%; height:100%; }
+.st-th i{ flex:1; }
+.st-fx{ position:absolute; inset:0; }
+
+.st-name{ font-weight:800; font-size:14px; }
+.st-desc{ font-size:12px; color:var(--muted); line-height:1.35; min-height:32px; }
+.st-foot{ display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:auto; flex-wrap:wrap; }
+.st-price{ display:inline-flex; align-items:center; gap:5px; font-weight:800; font-size:14px; }
+
+.st-btn{
+  padding:8px 14px; border-radius:999px; font-size:13px; font-weight:800; color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent-deep));
+  transition:transform .15s, opacity .15s;
+}
+.st-btn:active{ transform:scale(.94); }
+.st-btn:disabled{ opacity:.45; pointer-events:none; }
+.st-btn.ghost{ background:transparent; border:1px solid var(--line); color:var(--text); }
+.st-btn.big{ width:100%; padding:13px; font-size:15px; margin-top:12px; }
+
+.st-tag{ font-size:11px; font-weight:800; padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.08); color:var(--muted); }
+.st-tag.eq{ background:rgba(74,222,128,.16); color:var(--ok); }
+.st-tag.own{ background:rgba(168,85,247,.2); color:var(--accent2); }
+.st-tag.lock{ background:rgba(251,191,36,.14); color:#fbbf24; }
+
+.st-isec{ margin-bottom:20px; }
+.st-isec h3, .st-h{ font-size:15px; font-weight:800; margin:18px 0 10px; }
+.st-isec h3 small{ color:var(--muted); font-weight:600; margin-left:4px; }
+.st-note{ font-size:12px; color:var(--muted); margin-top:12px; line-height:1.4; }
+
+/* ---------- carteira ---------- */
+.wl-hero{
+  display:flex; align-items:center; gap:14px; padding:18px; border-radius:18px;
+  background:radial-gradient(circle at 15% 20%,rgba(192,132,252,.35),transparent 55%),linear-gradient(135deg,#2a0f55,#12082a);
+  border:1px solid rgba(192,132,252,.4);
+  box-shadow:0 0 28px rgba(168,85,247,.2);
+}
+.wl-coin{ filter:drop-shadow(0 0 10px rgba(192,132,252,.7)); display:flex; }
+.wl-hero small{ color:#d8b4fe; font-size:12px; display:block; }
+.wl-hero b{ font-size:32px; font-weight:900; letter-spacing:.3px; }
+.wl-hero b em{ font-style:normal; font-size:15px; color:var(--accent2); }
+.wl-two{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+.wl-two div{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px; }
+.wl-two small{ display:block; color:var(--muted); font-size:12px; }
+.wl-two b{ font-size:18px; }
+.pos{ color:var(--ok); } .neg{ color:var(--danger); }
+
+.dl-box{ background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:14px; }
+.dl-strip{ display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+.dy{
+  display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 0 7px;
+  border-radius:10px; background:rgba(255,255,255,.04); border:1px solid transparent; color:var(--muted);
+}
+.dy small{ font-size:9px; } .dy b{ font-size:12px; color:var(--text); }
+.dy.done{ background:rgba(74,222,128,.12); border-color:rgba(74,222,128,.4); }
+.dy.today{ background:rgba(168,85,247,.2); border-color:var(--accent2); animation:dyPulse 2s ease-in-out infinite; }
+@keyframes dyPulse{ 50%{ box-shadow:0 0 12px rgba(192,132,252,.55); } }
+.dl-info{ display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-top:12px; }
+.dl-info b{ color:var(--text); }
+
+.ms-list{ display:flex; flex-direction:column; gap:10px; }
+.ms{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px; }
+.ms.is-done{ opacity:.65; }
+.ms-top{ display:flex; justify-content:space-between; gap:10px; }
+.ms-top b{ font-size:14px; display:block; } .ms-top small{ color:var(--muted); font-size:12px; }
+.ms-rw{ display:inline-flex; align-items:center; gap:4px; font-weight:800; font-size:13px; white-space:nowrap; }
+.ms-bar{ height:6px; border-radius:3px; background:rgba(255,255,255,.08); margin:10px 0 8px; overflow:hidden; }
+.ms-bar i{ display:block; height:100%; background:linear-gradient(90deg,var(--accent-deep),var(--accent2)); border-radius:3px; transition:width .4s; }
+.ms-bot{ display:flex; justify-content:space-between; align-items:center; }
+.ms-bot small{ color:var(--muted); font-size:12px; }
+
+.tx-list{ display:flex; flex-direction:column; }
+.tx{ display:flex; justify-content:space-between; gap:10px; padding:10px 2px; border-bottom:1px solid var(--line); font-size:14px; }
+.tx span{ color:var(--muted); } .tx small{ color:var(--muted); white-space:nowrap; font-size:12px; padding-top:2px; }
+
+/* =========================================================
+   MOLDURAS: a arte (SVG animado) é gerada e injetada por frames.js
+   (<style id="frStyles">). Aqui só a base e o modo parado.
+========================================================= */
+.fr{ position:relative; overflow:visible; }
+
+/* =========================================================
+   ESTILOS DE NOME (só aparência)
+========================================================= */
+.nmx{ font-weight:800; }
+.nm-grad{ background:linear-gradient(90deg,#c084fc,#7c3aed,#e879f9); -webkit-background-clip:text; background-clip:text; color:transparent !important; -webkit-text-fill-color:transparent; }
+.nm-neon{ color:#f5d0fe !important; text-shadow:0 0 4px #e879f9,0 0 10px #a855f7,0 0 18px #7c3aed; }
+.nm-glow{ color:#fff !important; text-shadow:0 0 8px rgba(255,255,255,.9),0 0 18px rgba(192,132,252,.8); }
+.nm-shadow{ color:#fff !important; text-shadow:2px 2px 0 #6d28d9,4px 4px 0 rgba(0,0,0,.45); }
+.nm-aurora{ background:linear-gradient(90deg,#34d399,#22d3ee,#a78bfa,#f472b6,#34d399); background-size:200% 100%; -webkit-background-clip:text; background-clip:text; color:transparent !important; -webkit-text-fill-color:transparent; animation:nmFlow 6s linear infinite; }
+.nm-futur{ color:#a5f3fc !important; letter-spacing:.06em; text-shadow:0 0 6px rgba(34,211,238,.9); font-variant:small-caps; }
+@keyframes nmFlow{ to{ background-position:200% 0; } }
+
+/* emblema ao lado do nome */
+.bdg{ display:inline-flex; vertical-align:-2px; margin-left:6px; }
+.bdg-svg{ filter:drop-shadow(0 0 4px currentColor); }
+
+/* =========================================================
+   EFEITOS NOS CANTOS (camada global; não recebe toque).
+   As cenas são SVGs animados gerados por frames.js (NoxFx).
+========================================================= */
+.fxbox{ pointer-events:none; }
+#fxLayer{ position:fixed; inset:0; z-index:40; pointer-events:none; }
+#fxLayer[hidden]{ display:none; }
+.fxc{ position:absolute; width:min(34vw,136px); height:min(34vw,136px); overflow:hidden; pointer-events:none; opacity:.62;
+  -webkit-mask-image:radial-gradient(circle at 0 0,#000 0,rgba(0,0,0,.85) 38%,transparent 92%); mask-image:radial-gradient(circle at 0 0,#000 0,rgba(0,0,0,.85) 38%,transparent 92%); }
+.fxc .fxs{ display:block; }
+.fxc.tl{ top:var(--safe-t); left:0; }
+.fxc.tr{ top:var(--safe-t); right:0; transform:scaleX(-1); }
+.fxc.bl{ bottom:calc(var(--nav-h) + var(--safe-b) + 2px); left:0; transform:scaleY(-1); }
+.fxc.br{ bottom:calc(var(--nav-h) + var(--safe-b) + 2px); right:0; transform:scale(-1,-1); }
+.st-fx{ overflow:hidden; }
+.st-fx .fxc{ width:50%; height:50%; opacity:.85; }
+.st-fx .fxc.tl,.st-fx .fxc.tr{ top:0; } .st-fx .fxc.bl,.st-fx .fxc.br{ bottom:0; }
+
+/* nomes e cartões: parados em aparelho fraco / aba escondida / pouco movimento */
+html.lite .nmx, html.lite .st-card, html.lite .dy.today{ animation:none !important; }
+html.fx-pause .nmx{ animation-play-state:paused !important; }
+@media (prefers-reduced-motion:reduce){ .nmx, .st-card{ animation:none !important; } }
+
+/* a Store tem 5 abas na barra, igual às outras */
+body[data-view="store"] .bottom-nav{ display:flex; }
+
+/* emblema do dono (desenhado por código): brilho dourado em vez da cor do texto */
+.bdg-wide{ filter:drop-shadow(0 0 3px rgba(251,191,36,.55)); vertical-align:middle; overflow:visible; }
+
+/* banners animados (banners.js) */
+.bnx{ position:absolute; inset:0; width:100%; height:100%; display:block; pointer-events:none; }
+.st-bn{ overflow:hidden; }
+.profile-banner, .pe-banner{ position:relative; overflow:hidden; }
+.profile-banner > .banner-back{ z-index:2; }
